@@ -1,0 +1,650 @@
+---
+title: "FeBRILe3 - Preliminary Simulations"
+subtitle: "Fever, Blood cultures and Readiness for discharge in Infants Less than 3 months old"
+author: "James Totterdell"
+date: "`r Sys.Date()`"
+output: 
+  bookdown::pdf_document2:
+    fig_caption: yes
+new_session: true
+delete_merged_file: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	eval = FALSE,
+	message = FALSE,
+	warning = FALSE,
+	include = FALSE
+)
+
+options(stringsAsFactors = FALSE)
+```
+
+
+```{r pkgs, include=FALSE, eval=TRUE}
+library(tidyverse)
+library(magrittr)
+library(knitr)
+library(kableExtra)
+library(doParallel)
+library(latex2exp)
+
+ggplot2::theme_set(
+  ggplot2::theme_bw(base_size = 9) + 
+    ggplot2::theme(axis.title = ggplot2::element_text(size = ggplot2::rel(0.9))) +
+    ggplot2::theme(axis.text = ggplot2::element_text(size = ggplot2::rel(0.7))) +
+    ggplot2::theme(panel.grid.minor = ggplot2::element_blank()) +
+    ggplot2::theme(plot.background = ggplot2::element_rect(fill = "transparent")))
+```
+
+
+# Thoughts
+
+Is seasonality an issue which needs to be considered? Any reason to suspect different re-admission rates by time of year? Say, re-admission higher in winter and first interim based on data obtained during June to August, might we conclude inferiority, but only because higher baseline in winter than rest of year?
+
+Single-arm means observational, no randomisation to treatment. We are not using a historical control, but instead using "objective performance criteria" (OPC) derived from historical data from registries. The OPC is a fixed bar for performance in lieu of a control group used as a comparator in single-arm trials. Used for comparison in safety end-points.
+
+The OPC needs to be based on the same population (low-risk infants etc.). Do we know what population was used to derive the historical rates etc.?
+
+Would this really be called a "non-inferiority" or just safety trial?
+
+We should really include some measure of variability in the historical estimate. What data is this estimate based on? How far back does it go (based on last 12 months, last 10 years, may change over time)? How was it calculated? Do we have access to this data? Estimate of precision?
+
+
+
+# Background
+
+Distinguishing between benign, self-limiting viral infections and serious bacterial infections in young infants <3 months old with fever is a daily challenge for paediatricians worldwide. As a result, these infants undergo invasive investigations (including blood, urine and spinal fluid samples) to look for bacterial infection and stay in hospital for at least 48 hours on intravenous antibiotics until bacterial infection has been excluded. However, recent international studies support change to this practice by demonstrating that nearly all infants with bacteria in their blood will have a positive blood culture test by 24 hours and it is not necessary to wait 48 hours to show the test is negative.
+
+# Research Question
+
+We hypothesise that the implementation of evidence-based criteria for the safe early discharge of infants aged < 3 months old with FWS is associated with a rate of unplanned reattendance to hospital within 7 days of discharge which is non-inferior to that observed under current practice. Our secondary research questions will address gaps in local evidence regarding infections in these infants, to enable safe implementation of further guideline changes reflecting evidence-based, best-practice care. This could include, for example, deferment of lumbar puncture and/or outpatient management of very low risk infants.
+
+# Study Design
+
+Febrile3 is a pragmatic, multi-site, single-armed non-inferiority study of the safety of a change in Perth Children's Hospital (PCH) and Fiona Stanley Hospital (FSH) policy allowing infants with fever without source (FWS) who fulfil evidence-based criteria for being at low risk for severe bacterial infection (SBI) to be discharged as early as 24 hours from hospital.
+
+The primary objective is to demonstrate that the rate of re-admission to hospital following the policy change is no worse than the historical rate.
+
+The primary outcome is the the proportion of low-risk infants discharged before the current standard of 48 hours who re-presented or who were re-admitted to hospital due to a clinical deterioration/care-giver concern within 7 days of discharge.
+
+Inclusion/exclusion criteria...
+
+# Sample Size and Accrual
+
+The trial is expected to run for up to two years and the expectation is that up to 500 individuals may be enrolled over the course of the study. The end-point is 7-day re-admission, so any issues around accrual rates are neglibile.
+
+# Statistical Analysis
+
+Assume that the historical baseline rate is $\theta_0$, and we will allow the policy change to produce the same rate within some tolerance $\delta$. The new rate under the policy change is $\theta$. 
+
+
+
+We are interested in assessing
+$$
+\begin{aligned}
+&H_0:\theta > \theta_0 + \delta\quad\text{(inferior)} \\
+&H_1:\theta \leq \theta_0 + \delta\quad\text{(non-inferior)}
+\end{aligned}
+$$
+and declaring the policy change non-inferior or inferior.
+
+For now we will assume $\theta_0$ is known exactly, however, it may be more realstic to assume some distribution $\theta_0\sim\text{Beta}(\alpha_0,\beta_0)$ such that $\alpha_0/(\alpha_0+\beta_0)$ is equal to the historical estimate. The variance could be based on how the estimate of the historical rate was obtained, or on our confidence in the estimate. Perhaps different rates should also be assumed for each site, but for now this is not considered.
+
+The new rate following the change in policy, and the number of responses observed, will be modelled by a Beta-Binomial model. We pre-specify analysis stages at points $k=1,...,K$ and define
+$$
+\begin{aligned}
+n_k &= \text{the number of enrolees since stage } k-1 \\
+x_k &= \text{the number of re-admissions within 7-days of discharge since stage }k-1 \\
+x_k &\sim \text{Binomial}(n_k, \theta) \\
+N_k = \sum_{i=1}^k n_i &= \text{the total sample size at stage } k \\
+y_k = \sum_{i=1}^k x_i &= \text{the total number of re-admissions by stage } k \\
+N_K = \sum_{k=1}^K n_k &= \text{the maximum sample size available to the study} \\
+\tilde y_k = \sum_{i=k+1}^Kx_i &= \text{the remaining number of re-admissions which are unknown at stage } k
+\end{aligned}
+$$
+
+The complete model functions of interest are
+$$
+\begin{aligned}
+\pi_0(\theta) &= \text{Beta}(\theta|\alpha,\beta) \\
+f(y_k|\theta) &= \text{Binomial}(N_k, \theta) \\
+\pi_k(\theta|y_k) &= \text{Beta}(\theta|\alpha + y_k, \beta + N_k - y_k) \\
+\tilde f_k(\tilde y_k|y_k) &= \text{Beta-Binomial}(\tilde y_k|N_K-N_k, \alpha + y_k, \beta + N_k - y_k) \\
+\pi_K(\theta|y_k, \tilde y_k) &= \text{Beta}(\theta|\alpha + y_k + \tilde y_k, \beta + N_K - y_k - \tilde y_k)
+\end{aligned}
+$$
+
+We can base our decision and stopping rules at stage $k$ on either the posterior probability of the hypotheses at stage $k$, or the predictive probability of the hypotheses at the maximum sample size based on our information at stage $k$.
+
+For fixed $\theta_0$ we have
+$$
+\begin{aligned}
+P_k &= \mathbb P[H_1|y_k] \\
+&= \pi_k(\theta \leq \theta_0+\delta|y_k) \\
+&= F_k^\theta(\theta_0+\delta|\alpha+y_k, \beta+N_k - y_k) \\
+&= 1 - \mathbb P[H_0|y_k] \\
+P_K &= \mathbb P[H_1|y_k, \tilde y_k]\\
+&= \pi_K(\theta \leq \theta_0+\delta|y_k, \tilde y_k) \\
+PP_k &= \mathbb E^{\tilde y_k|y_k}[\mathbb I_{(\bar c_K, 1]}(P_K)] \\
+&= \sum_{\tilde y_k=0}^{N-N_k}\mathbb I_{(\bar c_K, 1]}(P_K) \tilde f_k(\tilde y_k|y_k)
+\end{aligned}
+$$
+
+
+Our decision rule may be based on $\mathcal P_k \in \{P_k, PP_k\}$ as follows
+$$
+\delta_k(y_k) = \begin{cases} 
+\mathcal P_k < \underbar c_k &\implies a_0\quad (\text{accept } H_0) \\
+\mathcal P_k > \bar c_k &\implies a_1\quad (\text{accept } H_1) \\
+\underbar c_k \leq \mathcal P_k\ \leq \bar c_k\wedge k<K&\implies a_2\quad (\text{proceed to stage } k+1) \\
+\underbar c_k \leq \mathcal P_k\ \leq \bar c_k\wedge k=K&\implies a_3\quad (\text{inconclusive})
+\end{cases}
+$$
+
+In the current case, we restrict attention to decisions based on $\pi_k$ rather than the predicted posterior $\pi_K$.
+$$
+\delta_k(y_k) = \begin{cases} 
+P_k < \underbar c_k &\implies a_0\quad (\text{accept } H_0\text{, declare inferior}) \\
+P_k > \bar c_k &\implies a_1\quad (\text{accept } H_1\text{, declare non-inferior}) \\
+\underbar c_k \leq P_k\ \leq \bar c_k\wedge k<K&\implies a_2\quad (\text{proceed to stage } k+1) \\
+\underbar c_k \leq P_k\ \leq \bar c_k\wedge k=K&\implies a_3\quad (\text{accept }H_0\text{, but inconclusive})
+\end{cases}
+$$
+
+We specify a a corresponding non-informative deterministic stopping rule $\tau_n(x_{1:n})$ which is defined as
+$$
+\tau_k(y_k) = \mathbb I_{\{a_0,a_1\}}[\delta_k(y_k)]
+$$
+which has stopping time (sample size) $N_k = \min\left\{k\in\{1,...,K\}|\tau_k(y_k)=1,\sum_{j=1}^{k-1}\tau_j(y_{j}) = 0\right\}$.
+
+Assuming we use the same cut-offs for every analysis stage then in the posterior case, there are three tunable parameters $(\delta, \underbar c, \bar c)$ and in the predicitive posterior case, there are four tunable parameters $(\delta, \underbar c, \bar c, C)$. Perhaps $\delta$ would also be considered fixed if we have a known meaningful tolerance level.
+
+We aim to choose these parameters to calibrate the Type I and Type II (1 - power) error rates under the null hypothesis.
+
+We have
+$$
+\mathbb P^\theta[N_\tau = ] = \mathbb E^\theta[(1 - \tau_1)(1 - \tau_2)...(1 - \tau_{n-1})\tau_n]
+$$
+
+We are interested in estimating the following quantities:
+
+  * $\mathbb E^{\theta^\star}[N_\tau]$ the expected sample size under $\theta = \theta^\star$
+  * $\mathbb P_{H_0}(a_1)$ the Type I error
+  * $\mathbb P_{H_1}(a_0)$ the Type II error
+  
+The type I error at stage $k \in \{1,...,K\}$ is the probability that we declare non-inferiority at that stage.
+$$
+\alpha_k = \sum_{y_1=0}^{n_1}\cdots\sum_{y_k=0}^{n_k}\left[\mathbb I[\mathbb P[H_1|D_k]>c_k]\prod_{j=1}^{k-1}(1 - \tau_j(D_j))\prod_{i=1}^k\text{Binomial}(y_i|n_k,\theta_0)\right]
+$$
+
+\clearpage
+
+# Simulations
+
+*NOTE - DUE TO THE DISCRETE NATURE OF THE OBSERVATIONS, THE POSTERIOR PROBABILITIES WILL "JUMP"*
+
+FOR EXAMPLE, CONSIDER TESTING POSTERIOR PROBABILITY PARAMETER IS LESS THAN 0.07 IS GREATER THAN 0.975. THE ONLY WAY TO SATISFY THE REQUIREMENT BETWEEN SAMPLE SIZES 50 TO 75 IS TO OBSERVE ZERO OUTCOMES. THE PROBABILITY OF ZERO OUTCOMES DECREASES OVER THESE SAMPLE SIZES THE POSTERIOR PROBABILITY WILL DECREASE, UNTIL WE GET TO 80 WHERE NOW EITHER 0 OR 1 OUTCOMES WOULD ACHIEVE THE POSTERIOR PROBABILITY, AND SO THE PROBABILITY OF OBSERVING THIS EFFECT INCREASES ONLY TO CONTINUE DECREASING UNTIL 2 OUTCOMES IS ALLOWED ETC.
+
+End-point will be 7-day readmission to hospital. Possibility of also using representation to ED, or a combination of the two.
+
+Previous studies suggest a historical baseline rate of 4% to 6%. We wish to assess whether the policy change results in a rate of readmission no worse than the historical rate. We will allow a non-inferiority margin of $\delta = 0.03$ on the reponse proportion scale, however we can also explore the consequences of varying this margin.
+
+We aim to choose $[\underbar c_k, \bar c_k]$ to achieve Type I and Type II error control.
+
+We want to run a number of scenarios to get a sense of how large a sample may be needed to achieve the stopping rule stated above. At 500 children over two years we assume accrual of about 5 children per week (520 over 104 weeks).
+
+We could conduct analysis and make a decision for every new child enrolled. However, the more decisions we make, the higher the probability of making the wrong decision for fixed decision boundaries, but for now, assume analysis every week. We denote the week by $m$. Suppose over the entire study we observe $\{x_i\in\{0,1\}\}_{i=1}^n$ at weeks $\{t_i\in\{1,...,104\}\}_{i=1}^n$. At each week $m$ we calculate $y_m=\sum_{\{i|t_i\leq m\}} x_i$ over the set of enrolled individuals and determine the week $m$ posterior.
+
+## Scenarios
+
+Assuming a maximal sample size of 500 with no interim anlayses, we can determine the probability of each decision under each scenario exactly.
+
+```{r, eval=TRUE, include=TRUE, echo=FALSE}
+scenarios <- tibble(
+  "Scenario" = 1:9,
+  "$\\delta$" = rep(0.03, 9),
+  "$\\theta_0$" = c(0.04, 0.04, 0.04, 0.05, 0.05, 0.05, 0.06, 0.06, 0.06),
+  "$\\theta^\\star$" = c(0.07, 0.04, 0.10, 0.08, 0.05, 0.11, 0.09, 0.06, 0.12))
+# kable(scenarios, format = "latex", escape = F, booktabs = T, longtable = F,
+#       caption = "Scenarios considered.") %>% 
+#   kable_styling(latex_options = "hold_position")
+```
+
+
+```{r, eval=TRUE, include=TRUE, echo=FALSE}
+a <- 1
+b <- 1
+nmax <- 500
+n <- 0:nmax
+k_non <- 0.975
+k_inf <- 0.025
+p_non <- rep(0, nrow(scenarios))
+p_inf <- p_non
+for(i in 1:nrow(scenarios)) {
+  s <- as.numeric(scenarios[i, 1])
+  d <- as.numeric(scenarios[i, 2])
+  p0 <- as.numeric(scenarios[i, 3])
+  ptru <- as.numeric(scenarios[i, 4])
+  i_non <- which(pbeta(p0 + d, a + n, b + nmax - n) > k_non) - 1
+  i_inf <- which(pbeta(p0 + d, a + n, b + nmax - n) < k_inf) - 1
+  p_non[i] <- sum(dbinom(i_non, nmax, ptru))
+  p_inf[i] <- sum(dbinom(i_inf, nmax, ptru))
+}
+bind_cols(scenarios, 
+          "$\\mathbb P[a_1|y_K]$" = sprintf("%.2f", p_non),
+          "$\\mathbb P[a_0|y_K]$" = sprintf("%.2f", p_inf)) %>%
+ kable(escape = F, booktabs = T, align = "r",
+       caption = "Scenarios considered."
+       ) %>% 
+  kable_styling(latex_options = "hold_position") %>%
+  collapse_rows(latex_hline = "none", valign = "top")
+```
+
+
+```{r}
+get_inf <- function(p0, ptru) {
+  i_inf <- which(pbeta(p0 + d, a + n, b + nmax - n) < k_inf) - 1
+  sum(dbinom(i_inf, nmax, ptru))
+}
+get_non <- function(p0, ptru) {
+  i_non <- which(pbeta(p0 + d, a + n, b + nmax - n) > k_non) - 1
+  sum(dbinom(i_non, nmax, ptru))
+}
+gg <- expand.grid("$\\theta_0$" = seq(0.01, 0.2, 0.005), 
+                  "$\\theta^\\star$" = seq(0.01, 0.2, 0.005))
+gg$ph0 <- Vectorize(get_inf)(gg[, 1], gg[, 2])
+gg$ph1 <- Vectorize(get_non)(gg[, 1], gg[, 2])
+
+ggplot(gg,
+       aes(`$\\theta^\\star$`, ph1, group = `$\\theta_0$`)) +
+  geom_line(aes(colour = `$\\theta_0$`))
+```
+
+
+```{r, eval=TRUE, include=TRUE, echo=FALSE}
+# Simulate Bayesian single-arm non-inferiority trial
+# with early termination for inferiority/non-inferiority
+# Model:
+#  p         ~ beta(a, b)
+#  x_t|p     ~ binomial(n_t, p) t = 1...tt
+#  p|x_{1:t} ~ beta(a + sum(x_{1:t}), b + n - sum(x_{1:t}))
+#
+# Hypothesis:
+#   H_0: p > p_0 + d
+#   H_1: p < p_0 + d
+#
+# Terimnal decision rule:
+#   Pr(p < p_0 + d | x_{(1:t)}) > k_non => non-inferior
+#   Pr(p < p_0 + d | x_{(1:t)}) < k_inf => inferior
+#   Otherwise => inconclusive
+#
+# Interim decision rule:
+#   Pr(p < p_0 + k | x_{(1:t)}) > k_non => non-inferior
+#   Pr(p < p_0 + k | x_{(1:t)}) < k_inf => inferior
+#   Otherwise => continue to k + 1
+sim_trial <- function(
+  sim_id = 1,
+  ptru   = 0.08,
+  p0     = 0.05,
+  d      = 0.03,
+  nint   = seq(50, 100, 5),
+  k_non  = 0.975,
+  k_inf  = 0,
+  a      = 1,
+  b      = 1
+) {
+  # Generate data
+  x <- cumsum(rbinom(length(nint), diff(c(0, nint)), ptru))
+  
+  # Simulate interim analyses
+  sim_interim <- function(interim) {
+    # Posterior parameters
+    xcurr <- x[interim]
+    ncurr <- nint[interim]
+    apost <- a + xcurr
+    bpost <- b + ncurr - xcurr
+    # Posterior probability of H_1
+    ptail <- pbeta(p0 + d, apost, bpost)
+    
+    # Decision rule
+    if(interim < length(nint)) {
+      # Check non-inferiority
+      if(ptail > k_non) {
+        return(list(action = "stop", decision = "non-inferior", n = ncurr, ptail = ptail))
+      }
+      # Check inferiority
+      if(ptail < k_inf) {
+        return(list(action = "stop", decision = "inferior", n = ncurr, ptail = ptail))
+      }
+      return(list(action = "continue", decision = "", n = ncurr, ptail = ptail)) 
+    } else {
+      # Check non-inferiority
+      if(ptail > k_non) {
+        return(list(action = "none", decision = "non-inferior", n = ncurr, ptail = ptail))
+      }
+      # Check inferiority
+      if(ptail < k_inf) {
+        return(list(action = "none", decision = "inferior", n = ncurr, ptail = ptail))
+      }
+      # return(list(action = "none", decision = "inconclusive", n = ncurr, ptail = ptail))
+      return(list(action = "none", decision = "inferior", n = ncurr, ptail = ptail))
+    }
+  }
+  # Iterate through all the interims
+  intr <- lapply(1:length(nint), sim_interim)
+  # Collect the results
+  do.call(rbind, intr)
+  sim_trial <- data.frame(sim_id = sim_id, stage = 1:length(nint), do.call(rbind.data.frame, intr))
+  # Check the trial outcome and return trial quantities
+  stopi <- match("stop", sim_trial$action)
+  if(is.na(stopi)) {
+    stage_end <- length(nint)
+  } else {
+    stage_end <- stopi
+  }
+  a_post <- a + x[stage_end]
+  b_post <- b + nint[stage_end] - x[stage_end]
+  sim_results <- data.frame(sim_id = sim_id, 
+                            stage = stage_end,
+                            decision = sim_trial[stage_end, "decision"],
+                            samples = nint[stage_end],
+                            max_samples = tail(nint, 1),
+                            responses = x[stage_end],
+                            a_post = a_post,
+                            b_post = b_post,
+                            m_post = a_post / (a_post + b_post),
+                            l_post = qbeta(0.025, a_post, b_post),
+                            u_post = qbeta(0.975, a_post, b_post),
+                            p_h1 = sim_trial[stage_end, "ptail"])
+  return(list(sim_trial, sim_results))
+}
+
+sim_scenario <- function(sims, ...) {
+  require(doParallel)
+  res <- foreach(i = 1:sims, .packages = "rmutil", .export = "sim_trial") %dopar% {
+    sim_trial(i, ...)
+    
+  }
+  res <- unlist(res, recursive = F)
+  sim_trials <- do.call(rbind.data.frame, res[seq(1, 2*sims, 2)])
+  sim_results <- do.call(rbind.data.frame, res[seq(2, 2*sims, 2)])
+  return(list(sim_trials, sim_results))
+}
+
+summarise_scenario <- function(sim_results, ...) {
+  prob_noninferior <- with(sim_results[[2]], mean(decision == "non-inferior"))
+  prob_inferior <- with(sim_results[[2]], mean(decision == "inferior"))
+  prob_stop_early <- with(sim_results[[2]], mean(samples < max_samples))
+  expect_sample_size <- with(sim_results[[2]], mean(samples))
+  sd_sample_size <- with(sim_results[[2]], sd(samples))
+  expected_value <- with(sim_results[[2]], mean(m_post))
+  sd_value <- with(sim_results[[2]], sd(m_post))
+  return(c("prob_noninferior" = prob_noninferior, 
+           "prob_inferior" = prob_inferior,
+           "prob_stop_early" = prob_stop_early, 
+           "expect_sample_size" = expect_sample_size,
+           "sd_sample_size" = sd_sample_size,
+           "average_estimate" = expected_value,
+           "sd_estimate" = sd_value))
+}
+
+
+example_trial <- sim_trial(nint = seq(50, 500, 50))
+
+cl <- makeCluster(4)
+registerDoParallel(cl)
+
+for(i in 1:nrow(scenarios)) {
+  sc_res <- sim_scenario(1e3, 
+                         d = as.numeric(scenarios[i, 2]),
+                         p0 = as.numeric(scenarios[i, 3]),
+                         ptru = as.numeric(scenarios[i, 4]),
+                         nint = seq(50, 500, 50))
+  assign(paste0("sc_", i), c("Scenario" = i, summarise_scenario(sc_res)))
+}
+bind_rows(sc_1, sc_2, sc_3, sc_4, sc_5, sc_6, sc_7, sc_8, sc_9) %>%
+  kable(escape = F, booktabs = T, align = "r",
+        caption = "Scenario simulation results.", digits = c(0, rep(3, 3), 0, 0, rep(2, 2)),
+        col.names = c("Scenario", 
+                      "$\\mathbb P(\\text{non-inferior})$",
+           "$\\mathbb P(\\text{inferior})$",
+           "$\\mathbb P(\\text{stop early})$",
+           "$\\mathbb E(\\text{N})$",
+           "$\\sqrt{\\mathbb V(\\text{N})}$",
+           "$\\overline{\\mathbb E[\\theta]}$",
+           "$\\sqrt{V}$")) %>% 
+  kable_styling(latex_options = "hold_position") 
+```
+
+
+
+```{r}
+library(doParallel)
+library(rmutil)
+# Simulate Bayesian single-arm non-inferiority trial
+# with early termination for non-inferiority
+# Model:
+#  p         ~ beta(a, b)
+#  x_t|p     ~ binomial(n_t, p) t = 1...tt
+#  p|x_{1:t} ~ beta(a + sum(x_{1:t}), b + n - sum(x_{1:t}))
+#
+# Hypothesis:
+#   H_0: p > p_0 + m
+#   H_1: p < p_0 + m
+#
+# Terimnal decision rule:
+#   Pr(p < p_0 + m | x_{(1:t)}) > k => non-inferior
+#
+# Interim decision rule:
+#   Pr(p < p_0 + k | x_{(1:t)}) > k_non => non-inferior
+#   Pr(p < p_0 + k | x_{(1:t)}) < k_inf => inferior
+#   Pr[ Pr(p < p_0 + k | x_{(1:tt)}) > k | x_{(1:t)}] < k_fut
+sim_trial <- function(
+  sim  = 1,
+  ptru = 0.08,
+  p0   = 0.05,
+  m    = 0.03,
+  nint = seq(5, 100, 5),
+  k    = 0.975,
+  knon = 0.975,
+  kinf = 0.025,
+  kfut = 0.01,
+  a    = 1,
+  b    = 1
+) {
+  # Maximum allowable responses to declare non-inferiority
+  nmax <- max(nint)
+  post <- pbeta(p0 + m, a + 0:nmax, b + nmax - 0:nmax)
+  xsuc <- max(which(post > k) - 1)
+  
+  # Generate data
+  x <- cumsum(rbinom(length(nint), diff(c(0, nint)), ptru))
+  
+  # Simulate interim analyses
+  sim_interim <- function(interim) {
+    # Posterior parameters
+    xcurr <- x[interim]
+    ncurr <- nint[interim]
+    apost <- a + xcurr
+    bpost <- b + ncurr - xcurr
+    mpost <- apost / (apost + bpost)
+    vpost <- apost*bpost/((apost + bpost)^2*(apost + bpost + 1))
+    spost <- apost + bpost
+    ptail <- pbeta(p0 + m, apost, bpost)
+    
+    if(interim < length(nint)) {
+      # Check non-inferiority
+      if(ptail > knon) {
+        return(list(action = "stop", decision = "non-inferior", n = ncurr, ptail = ptail))
+      }
+        
+      # Check inferiority
+      if(ptail < kinf) {
+        return(list(action = "stop", decision = "inferior", n = ncurr, ptail = ptail))
+      }
+      
+      # Check futility
+      xrem <- xsuc - xcurr
+      if(xrem < 0) { # exceeded maximum allowable events to declare non-inferiority
+        sucp <- 0
+      } else {
+        sucp <- pbetabinom(xrem, size = nmax - ncurr, m = mpost, s = spost)
+      }
+      if(sucp <= kfut) {
+        return(list(action = "stop", decision = "futile", n = ncurr, ptail = ptail))
+      }
+      return(list(action = "continue", decision = "", n = ncurr, ptail = ptail)) 
+    } else {
+      # Check non-inferiority
+      if(ptail > k) {
+        return(list(action = "stop", decision = "non-inferior", n = ncurr, ptail = ptail))
+      } else {
+        return(list(action = "stop", decision = "inconclusive", n = ncurr, ptail = ptail))
+      }
+    }
+  }
+  
+  intr <- lapply(1:length(nint), sim_interim)
+  do.call(rbind, intr)
+  simr <- cbind(sim = 1, stage = 1:length(nint), do.call(rbind, intr))
+  stpi <- match("stop", sapply(intr, "[[", "action"))
+  return(intr[[stpi]])
+}
+
+cl <- makeCluster(4)
+registerDoParallel(cl)
+nint <- 1:500
+
+scen <- seq(0.9, 0.99, 0.01)
+for(j in length(scen)) {
+  
+}
+
+res1 <- do.call(rbind, 
+  foreach(i = 1:10000, .packages = "rmutil") %dopar% {
+     as.data.frame(
+     sim_trial(i, 
+               nint = nint,
+               ptru = 0.08,
+               p0   = 0.05,
+               m    = 0.03,
+               knon = 0.99,
+               k    = 0.99,
+               kfut = 0, 
+               kinf = 0))
+  })
+
+res2 <- do.call(rbind, 
+  foreach(i = 1:10000, .packages = "rmutil") %dopar% {
+     as.data.frame(
+     sim_trial(i, 
+               nint = nint,
+               ptru = 0.08,
+               p0   = 0.05,
+               m    = 0.03,
+               knon = 0.99,
+               k    = 0.99,
+               kfut = 0.01, 
+               kinf = 0.01))
+  })
+
+table(res1$decision)
+table(res2$decision)
+
+by(res1[, 3], res1[, "decision"], mean)
+by(res2[, 3], res2[, "decision"], mean)
+
+# Stop early for non-inferiority
+mean(res1$decision == "non-inferior" & res1$n < tail(nint, 1))
+mean(res2$decision == "non-inferior" & res2$n < tail(nint, 1))
+
+# Non-infeiority
+mean(res1$decision == "non-inferior")
+mean(res2$decision == "non-inferior")
+
+# Sample sizes
+mean(res1$n); median(res1$n); sd(res1$n)
+mean(res2$n); sd(res2$n)
+```
+
+
+```{r}
+stage <- 1:50
+n_stage <- 10*stage
+n_add <- diff(c(0, n_stage))
+n_max <- tail(n_stage, 1)
+
+# week <- 1:77 # Number of weeks for which the trial runs
+# tt <- rep(1:77, each = 1) # Time at which new participant was enrolled
+# nmax <- length(tt) # Maximum number of subjects
+# 
+# in_analysis <- outer(tt, week, `<=`)
+# n <- apply(in_analysis, 2, function(a) sum(a))
+
+a <- 1
+b <- 1
+
+sim_scenario <- function(sims, theta_true, theta0, k, thres_low, thres_hi) {
+  x <- matrix(0, sims, length(stage))
+  y <- matrix(0, sims, length(stage))
+  p <- matrix(0, sims, length(stage))
+  d <- matrix(0, sims, length(stage))
+  decision_stage <- rep(0, sims)
+  decision_made <- rep(0, sims)
+  decision_final <- rep(0, sims)
+  sample_size <- rep(0, sims)
+  
+  for(s in 1:sims) {
+    x[s, ] <- rbinom(length(stage), n_add, theta_true)
+    y[s, ] <- cumsum(x[s, ])
+    p[s, ] <- pbeta(theta0 + k, a + y[s, ], b + n_stage - y[s, ])
+    d[s, ] <- ifelse(p[s, ] > thres_hi, 1, ifelse(p[s, ] < thres_low, 2, 0))
+    decision_stage[s] <- ifelse(any(d[s, ] > 0), min(which(d[s, ] > 0)), NA)
+    decision_made[s] <- ifelse(!is.na(decision_stage[s]), d[s, decision_stage[s]], NA)
+    decision_final[s] <- tail(d[s, ], 1) 
+    sample_size[s] <- ifelse(!is.na(decision_stage[s]), n_stage[decision_stage[s]], max(stage))
+  }
+  
+  return(list(data = y,
+              posterior_prob = p,
+              decision_stage = decision_stage,
+              decision_made = decision_made,
+              decision_final = decision_final,
+              sample_size))
+}
+
+s1 <- c(sims = 10000, theta_true = 0.05, theta0 = 0.05, k = 0.03, thres_low = 0, thres_hi = 0.975)
+s2 <- c(sims = 10000, theta_true = 0.08, theta0 = 0.05, k = 0.03, thres_low = 0, thres_hi = 0.975)
+s3 <- c(sims = 10000, theta_true = 0.5, theta0 = 0.5, k = 0.00, thres_low = 0, thres_hi = 0.99)
+s4 <- c(sims = 10000, theta_true = 0.05, theta0 = 0.05, k = 0.03, thres_hi = 0.975)
+
+s1_res <- sim_scenario(s1[1], s1[2], s1[3], s1[4], s1[5], s1[6])
+s2_res <- sim_scenario(s2[1], s2[2], s2[3], s2[4], s2[5] ,s2[6])
+s3_res <- sim_scenario(s3[1], s3[2], s3[3], s3[4], s3[5], s3[6])
+s4_res <- sim_scenario(s4[1], s4[2], s4[3], s4[4], s4[5])
+
+prop.table(table(s1_res[[3]], useNA = "always"))
+prop.table(table(s2_res[[3]], useNA = "always"))
+prop.table(table(s3_res[[3]], useNA = "always"))
+prop.table(table(s4_res[[3]], useNA = "always"))
+```
+
+
+
+```{r}
+s <- 2
+x <- seq(0, 1, 0.001)
+pdat <- tibble(d = s2_res[[3]][s], n = n_stage, y = s2_res[[1]][s, ])
+pdat <- crossing(pdat, x)
+pdat %<>% mutate(dens = dbeta(x, a + y, b + n - y))
+
+ggplot(pdat, aes(x = x, y = factor(n), height = dens)) +
+  geom_density_ridges(scale = 4, rel_min_height = 0.025, stat = "identity") +
+  geom_vline(xintercept = 0.08, linetype = 2) +
+  geom_hline(data = pdat %>% filter(row_number() == 1), aes(yintercept = d)) +
+  theme_ridges(font_size = 10, grid = F) +
+  xlim(0, 0.2)
+```
+
