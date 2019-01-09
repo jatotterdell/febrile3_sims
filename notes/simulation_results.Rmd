@@ -1,0 +1,504 @@
+---
+title: "FeBRILe3 - Simulations"
+subtitle: "Fever, Blood cultures and Readiness for discharge in Infants Less than 3 months old"
+author: "James Totterdell"
+date: "`r Sys.Date()`"
+output: 
+  bookdown::pdf_document2:
+    fig_caption: yes
+new_session: true
+delete_merged_file: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	eval = FALSE,
+	message = FALSE,
+	warning = FALSE,
+	include = FALSE
+)
+
+options(stringsAsFactors = FALSE)
+```
+
+
+```{r pkgs, include=FALSE, eval=TRUE}
+library(tidyverse)
+library(magrittr)
+library(knitr)
+library(kableExtra)
+library(doParallel)
+library(latex2exp)
+
+ggplot2::theme_set(
+  ggplot2::theme_bw(base_size = 9) + 
+    ggplot2::theme(axis.title = ggplot2::element_text(size = ggplot2::rel(0.9))) +
+    ggplot2::theme(axis.text = ggplot2::element_text(size = ggplot2::rel(0.7))) +
+    ggplot2::theme(panel.grid.minor = ggplot2::element_blank()) +
+    ggplot2::theme(plot.background = ggplot2::element_rect(fill = "transparent")))
+```
+
+
+# Background and Rationale
+
+Distinguishing between benign, self-limiting viral infections and serious bacterial infections in young infants <3 months old with fever is a daily challenge for paediatricians worldwide. As a result, these infants undergo invasive investigations (including blood, urine and spinal fluid samples) to look for bacterial infection and stay in hospital for at least 48 hours on intravenous antibiotics until bacterial infection has been excluded. However, recent international studies support change to this practice by demonstrating that nearly all infants with bacteria in their blood will have a positive blood culture test by 24 hours and it is not necessary to wait 48 hours to show the test is negative.
+
+# Research Question
+
+We hypothesise that the implementation of evidence-based criteria for the safe early discharge of infants aged < 3 months old with FWS is associated with a rate of unplanned reattendance to hospital within 7 days of discharge which is non-inferior to that observed under current practice. Our secondary research questions will address gaps in local evidence regarding infections in these infants, to enable safe implementation of further guideline changes reflecting evidence-based, best-practice care. This could include, for example, deferment of lumbar puncture and/or outpatient management of very low risk infants.
+
+# Study Design
+
+Febrile3 is a pragmatic, multi-site, single-armed study of the safety of a change in Perth Children's Hospital (PCH) and Fiona Stanley Hospital (FSH) policy allowing infants with fever without source (FWS) who fulfil evidence-based criteria for being at low risk for severe bacterial infection (SBI) to be discharged as early as 24 hours from hospital.
+
+The primary objective is to demonstrate that the rate of re-admission to hospital following the policy change is no worse than the historical rate of re-admission.
+
+The primary outcome is the proportion of low-risk infants discharged before the current standard of 48 hours who re-presented or who were re-admitted to hospital due to a clinical deterioration/care-giver concern within 7 days of discharge.
+
+# Sample Size and Accrual
+
+The trial is expected to run for up to two years and the expectation is that up to 500 individuals may be enrolled over the course of the study. Therefore, we estimate assume accrual of about 5 individuals per week to achieve 500 individuals over the two year period.
+
+The end-point is 7-day re-admission. This would imply that at any stage of analysis, about 5 individuals may be enrolled without their 7-day follow-up information. This additional uncertainty could be incoporated into the analysis through the use of posterior predictive probabilities for the missing data.
+
+# Statistical Analysis
+
+Assume that the historical baseline rate is $\theta_0$, and we wish to assess the response rate under the new policy, denoted $\theta$. We decalre the new rate acceptable if it is within some tolerance $\tau$ of the historical rate. That is, we aim to assess the following:
+$$
+\begin{aligned}
+&H_0:\theta > \theta_0 + \tau\quad\text{(inferior)} \\
+&H_1:\theta \leq \theta_0 + \tau\quad\text{(non-inferior)}
+\end{aligned}
+$$
+and make a decision as to whether the response rate under the policy change is within the allowed tolerance.
+
+We assume $\theta_0$, the historical rate, is known exactly. However, it may be more realstic to assume some distribution $\theta_0\sim\text{Beta}(\alpha_0,\beta_0)$ such that $\alpha_0/(\alpha_0+\beta_0)$ is equal to the historical rate estimate and an appropriate variance.
+
+The new rate following the change in policy, and the number of responses observed, will be modelled by a Beta-Binomial model. We pre-specify analyses at stages $k=1,...,K$ and define
+$$
+\begin{aligned}
+n_k &= \text{the number of enrolees since stage } k-1 \\
+x_k &= \text{the number of re-admissions since stage }k-1 \\
+N_k = \sum_{i=1}^k n_i &= \text{the total sample size at stage } k \\
+y_k = \sum_{i=1}^k x_i &= \text{the total number of re-admissions by stage } k
+\end{aligned}.
+$$
+The complete model is
+$$
+\begin{aligned}
+\pi_0(\theta) &= \text{Beta}(\theta|\alpha,\beta) \\
+f(y_k|\theta) &= \text{Binomial}(N_k, \theta) \\
+\pi_k(\theta|y_k) &= \text{Beta}(\theta|\alpha + y_k, \beta + N_k - y_k) \\
+P_k &= \int_0^{\theta_0+\tau} \pi_k(\theta|y_k) d\theta
+\end{aligned}.
+$$
+
+We base our decisions rules at stage $k$ on the posterior probability of the non-inferiority hypotheses at stage $k$ as follows
+$$
+\delta_k(y_k) = \begin{cases} 
+P_k < \underbar c_k &\implies a_0\quad (\text{accept } H_0\text{, declare inferior}) \\
+P_k > \bar c_k &\implies a_1\quad (\text{accept } H_1\text{, declare non-inferior}) \\
+\underbar c_k \leq P_k\ \leq \bar c_k\wedge k<K&\implies a_2\quad (\text{proceed to stage } k+1) \\
+\underbar c_k \leq P_k\ \leq \bar c_k\wedge k=K&\implies a_3\quad (\text{inconclusive, accept }H_0\text{ by default})
+\end{cases}
+$$
+
+and the corresponding non-informative deterministic stopping rule defined by
+$$
+s_k(y_k) = \mathbb I_{\{a_0,a_1\}}[\delta_k(y_k)]
+$$
+which has stopping time (sample size) $\eta_k = \min\left\{k\in\{1,...,K\}|s_k(y_k)=1,\sum_{j=1}^{k-1}s_j(y_{j}) = 0\right\}$.
+
+For a fixed historical rate, $\theta_0$, tolerance level, $\tau$, new response rate, $\theta^\star$, and assuming the same probability cut-points for every interim analyiss, there are two tunable parameters $(\underbar c, \bar c)$. Simulations are used to estimate the following quantities of interest under various scenarios of assumed values for $(\theta_0, \tau, \theta^\star, \underbar c, \bar c)$:
+
+  * $\mathbb P_{H_0}(a_1)$ the probability we declare inferiority
+  * $\mathbb P_{H_1}(a_0)$ the probability we declare non-inferiority
+  * $\mathbb E^{\theta^\star}[N_\tau]$ the expected sample size under $\theta = \theta^\star$
+  * $\overline{\mathbb E[\theta]}$ the expected estimate of the response rate under the new policy.
+  
+\clearpage
+
+# Simulations
+
+For each scenario considered, quantities were estimated based on 10,000 simulations.
+
+```{r, eval=TRUE}
+n_sims <- 1e4
+```
+
+## Scenarios
+
+Assuming a maximal sample size of 500 with no interim anlayses, the probability of each decision under each scenario is determined exactly (Table 1).
+
+```{r, eval=TRUE, include=TRUE, echo=FALSE}
+scenarios <- tibble(
+  "Scenario" = 1:9,
+  "$\\tau$" = rep(0.03, 9),
+  "$\\theta_0$" = c(0.03, 0.03, 0.03, 0.05, 0.05, 0.05, 0.07, 0.07, 0.07),
+  "$\\theta^\\star$" = c(0.06, 0.03, 0.09, 0.08, 0.05, 0.11, 0.10, 0.07, 0.13),
+  "$\\underbar c_k$" = rep(0.025, 9),
+  "$\\bar c_k$" = rep(0.975, 9))
+# kable(scenarios, format = "latex", escape = F, booktabs = T, longtable = F,
+#       caption = "Scenarios considered.") %>% 
+#   kable_styling(latex_options = "hold_position")
+```
+
+
+```{r scenarios, eval=TRUE, include=TRUE, echo=FALSE}
+fixed_trial <- function(
+  ptru   = 0.08,
+  p0     = 0.05,
+  d      = 0.03,
+  nmax   = 500,
+  k_non  = 0.975,
+  k_inf  = 0.025,
+  a      = 1,
+  b      = 1
+) {
+  n <- 0:nmax
+  i_non <- which(pbeta(p0 + d, a + n, b + nmax - n) > k_non) - 1
+  i_inf <- which(pbeta(p0 + d, a + n, b + nmax - n) < k_inf) - 1
+  p_non <- sum(dbinom(i_non, nmax, ptru))
+  p_inf <- sum(dbinom(i_inf, nmax, ptru))
+  return(c(p_non, p_inf))
+}
+
+res <- t(sapply(1:nrow(scenarios), function(i) {
+  fixed_trial(d = as.numeric(scenarios[i, 2]),
+              p0 = as.numeric(scenarios[i, 3]),
+              ptru = as.numeric(scenarios[i, 4]))
+}))
+
+bind_cols(scenarios, 
+          "$\\mathbb P[\\text{non-inferior}]$" = sprintf("%.2f", res[, 1]),
+          "$\\mathbb P[\\text{inferior}]$" = sprintf("%.2f", res[, 2])) %>%
+ kable(escape = F, booktabs = T, align = "r",
+       caption = "Scenarios considered."
+       ) %>% 
+  kable_styling(latex_options = "hold_position") %>%
+  collapse_rows(latex_hline = "none", valign = "top")
+```
+
+
+```{r, eval=TRUE, include=TRUE, echo=FALSE}
+# Simulate Bayesian single-arm non-inferiority trial
+# with early termination for inferiority/non-inferiority
+# Model:
+#  p         ~ beta(a, b)
+#  x_t|p     ~ binomial(n_t, p) t = 1...tt
+#  p|x_{1:t} ~ beta(a + sum(x_{1:t}), b + n - sum(x_{1:t}))
+#
+# Hypothesis:
+#   H_0: p > p_0 + d
+#   H_1: p < p_0 + d
+#
+# Terimnal decision rule:
+#   Pr(p < p_0 + d | x_{(1:t)}) > k_non => non-inferior
+#   Pr(p < p_0 + d | x_{(1:t)}) < k_inf => inferior
+#   Otherwise => inconclusive
+#
+# Interim decision rule:
+#   Pr(p < p_0 + k | x_{(1:t)}) > k_non => non-inferior
+#   Pr(p < p_0 + k | x_{(1:t)}) < k_inf => inferior
+#   Otherwise => continue to k + 1
+sim_trial <- function(
+  sim_id = 1,
+  ptru   = 0.08,
+  p0     = 0.05,
+  d      = 0.03,
+  nint   = seq(50, 100, 5),
+  k_non  = 0.975,
+  k_inf  = 0.025,
+  a      = 1,
+  b      = 1
+) {
+  # Generate data
+  x <- cumsum(rbinom(length(nint), diff(c(0, nint)), ptru))
+  
+  # Simulate interim analyses
+  sim_interim <- function(interim) {
+    # Posterior parameters
+    xcurr <- x[interim]
+    ncurr <- nint[interim]
+    apost <- a + xcurr
+    bpost <- b + ncurr - xcurr
+    # Posterior probability of H_1
+    ptail <- pbeta(p0 + d, apost, bpost)
+    
+    # Decision rule
+    if(interim < length(nint)) {
+      # Check non-inferiority
+      if(ptail > k_non) {
+        return(list(action = "stop", decision = "non-inferior", n = ncurr, ptail = ptail))
+      }
+      # Check inferiority
+      if(ptail < k_inf) {
+        return(list(action = "stop", decision = "inferior", n = ncurr, ptail = ptail))
+      }
+      return(list(action = "continue", decision = "", n = ncurr, ptail = ptail)) 
+    } else {
+      # Check non-inferiority
+      if(ptail > k_non) {
+        return(list(action = "none", decision = "non-inferior", n = ncurr, ptail = ptail))
+      }
+      # Check inferiority
+      if(ptail < k_inf) {
+        return(list(action = "none", decision = "inferior", n = ncurr, ptail = ptail))
+      }
+      return(list(action = "none", decision = "inconclusive", n = ncurr, ptail = ptail))
+      # return(list(action = "none", decision = "inferior", n = ncurr, ptail = ptail))
+    }
+  }
+  # Iterate through all the interims
+  intr <- lapply(1:length(nint), sim_interim)
+  # Collect the results
+  do.call(rbind, intr)
+  sim_trial <- data.frame(sim_id = sim_id, stage = 1:length(nint), do.call(rbind.data.frame, intr))
+  # Check the trial outcome and return trial quantities
+  stopi <- match("stop", sim_trial$action)
+  if(is.na(stopi)) {
+    stage_end <- length(nint)
+  } else {
+    stage_end <- stopi
+  }
+  a_post <- a + x[stage_end]
+  b_post <- b + nint[stage_end] - x[stage_end]
+  sim_results <- data.frame(sim_id = sim_id, 
+                            stage = stage_end,
+                            decision = sim_trial[stage_end, "decision"],
+                            samples = nint[stage_end],
+                            max_samples = tail(nint, 1),
+                            responses = x[stage_end],
+                            a_post = a_post,
+                            b_post = b_post,
+                            m_post = a_post / (a_post + b_post),
+                            l_post = qbeta(0.025, a_post, b_post),
+                            u_post = qbeta(0.975, a_post, b_post),
+                            p_h1 = sim_trial[stage_end, "ptail"])
+  return(list(sim_trial, sim_results))
+}
+
+sim_scenario <- function(sims, ...) {
+  require(doParallel)
+  res <- foreach(i = 1:sims, .packages = "rmutil", .export = "sim_trial") %dopar% {
+    sim_trial(i, ...)
+    
+  }
+  res <- unlist(res, recursive = F)
+  sim_trials <- do.call(rbind.data.frame, res[seq(1, 2*sims, 2)])
+  sim_results <- do.call(rbind.data.frame, res[seq(2, 2*sims, 2)])
+  return(list(sim_trials, sim_results))
+}
+
+summarise_scenario <- function(sim_results, ...) {
+  prob_noninferior <- with(sim_results[[2]], mean(decision == "non-inferior"))
+  prob_inferior <- with(sim_results[[2]], mean(decision == "inferior"))
+  prob_stop_early <- with(sim_results[[2]], mean(samples < max_samples))
+  expect_sample_size <- with(sim_results[[2]], mean(samples))
+  sd_sample_size <- with(sim_results[[2]], sd(samples))
+  expected_value <- with(sim_results[[2]], mean(m_post))
+  sd_value <- with(sim_results[[2]], sd(m_post))
+  return(c("prob_noninferior" = prob_noninferior, 
+           "prob_inferior" = prob_inferior,
+           "prob_stop_early" = prob_stop_early, 
+           "expect_sample_size" = expect_sample_size,
+           "sd_sample_size" = sd_sample_size,
+           "average_estimate" = expected_value,
+           "sd_estimate" = sd_value))
+}
+
+cl <- makeCluster(4)
+registerDoParallel(cl)
+
+for(i in 1:nrow(scenarios)) {
+  sc_res <- sim_scenario(n_sims, 
+                         d = as.numeric(scenarios[i, 2]),
+                         p0 = as.numeric(scenarios[i, 3]),
+                         ptru = as.numeric(scenarios[i, 4]),
+                         nint = seq(50, 500, 50))
+  assign(paste0("sc_", i), c("Scenario" = i, summarise_scenario(sc_res)))
+}
+bind_rows(sc_1, sc_2, sc_3, sc_4, sc_5, sc_6, sc_7, sc_8, sc_9) %>%
+  kable(escape = F, booktabs = T, align = "r",
+        caption = "Scenario simulation results ($[\\underbar c_k = 0.025, \\bar c_k = 0.975]$).", 
+        digits = c(0, rep(2, 3), 0, 0, rep(2, 2)),
+        col.names = c("Scenario", 
+                      "$\\mathbb P(\\text{non-inferior})$",
+           "$\\mathbb P(\\text{inferior})$",
+           "$\\mathbb P(\\text{stop early})$",
+           "$\\mathbb E(\\text{N})$",
+           "$\\sqrt{\\mathbb V(\\text{N})}$",
+           "$\\overline{\\mathbb E[\\theta]}$",
+           "$\\sqrt{V}$")) %>% 
+  kable_styling(latex_options = "hold_position")
+```
+
+\clearpage
+
+## Scenario - $\theta_0 = 0.05$ and $\tau = 0.03$
+
+
+```{r baseline_case}
+prob_hypothesis <- function(k_non = 0.975, k_inf = 0.025) {
+  a <- 1
+  b <- 1
+  nmax <- 500
+  n <- 0:nmax
+  p0 <- 0.05
+  d <- 0.03
+  ptru <- 0.05
+  i_non <- which(pbeta(p0 + d, a + n, b + nmax - n) > k_non) - 1
+  i_inf <- which(pbeta(p0 + d, a + n, b + nmax - n) < k_inf) - 1
+  p_non <- sum(dbinom(i_non, nmax, ptru))
+  p_inf <- sum(dbinom(i_inf, nmax, ptru))
+  return(list(p_non, p_inf))
+}
+
+k_non <- seq(0.9, 0.999, 0.001)
+p_non <- unlist(sapply(k_non, function(x) prob_hypothesis(k_non = x))[1, ])
+k_inf <- seq(0.001, 0.1, 0.001)
+p_inf <- unlist(sapply(k_inf, function(x) prob_hypothesis(k_inf = x))[2, ])
+plot(k_non, p_non, type = 's', ylim = c(0, 1))
+cp <- diff(p_non) != 0
+cbind(k_non[-1], p_non[-1])[cp, ]
+
+plot(k_inf, p_inf, type = 's', ylim = c(0, 1))
+cp <- diff(p_inf) != 0
+cbind(k_inf[-1], p_inf[-1])[cp, ]
+```
+
+
+```{r, eval=TRUE, include=TRUE, echo=FALSE, cache = TRUE}
+scenarios <- tibble(
+  "Scenario" = 1:20,
+  "$\\delta$" = rep(0.03, 20),
+  "$\\theta_0$" = rep(0.05, 20),
+  "$\\theta^\\star$" = rep(c(0.03, 0.05, 0.08, 0.10), each = 5),
+  "$\\underbar c_k$" = rep(c(0.025), 20),
+  "$\\bar c_k$" = rep(c(0.95, 0.96, 0.97, 0.98, 0.99), 4))
+# kable(scenarios, format = "latex", escape = F, booktabs = T, longtable = F,
+#       caption = "Scenarios considered.") %>% 
+#   kable_styling(latex_options = "hold_position")
+
+for(i in 1:nrow(scenarios)) {
+  sc_res <- sim_scenario(n_sims, 
+                         d = as.numeric(scenarios[i, 2]),
+                         p0 = as.numeric(scenarios[i, 3]),
+                         ptru = as.numeric(scenarios[i, 4]),
+                         nint = seq(50, 500, 50),
+                         k_non = as.numeric(scenarios[i, 6]), 
+                         k_inf = as.numeric(scenarios[i, 5]))
+  assign(paste0("sc_", i), c("Scenario" = i, summarise_scenario(sc_res)))
+}
+cbind(scenarios[, c(1, 4, 5, 6)],
+      do.call(rbind.data.frame, lapply(paste0("sc_", 1:nrow(scenarios)), get))[,-1]) %>%
+  kable(escape = F, booktabs = T, align = "r",
+        caption = "Scenario simulation results.", 
+        digits = c(0, 2, 3, 2, rep(2, 3), 0, 0, rep(2, 2)),
+        col.names = c("Scenario",
+                      "$\\theta^\\star$",
+                      "$\\underbar c_k$",
+                      "$\\bar c_k$",
+                      "$\\mathbb P(\\text{non-inferior})$",
+           "$\\mathbb P(\\text{inferior})$",
+           "$\\mathbb P(\\text{stop early})$",
+           "$\\mathbb E(\\text{N})$",
+           "$\\sqrt{\\mathbb V(\\text{N})}$",
+           "$\\overline{\\mathbb E[\\theta]}$",
+           "$\\overline{\\sqrt{\\mathbb V[\\theta]}}$")) %>% 
+  kable_styling(latex_options = "hold_position") 
+```
+
+
+
+
+
+\clearpage
+
+## Scenario - $\theta_0 = 0.03$ and $\tau = 0.03$
+
+```{r, eval=TRUE, include=TRUE, echo=FALSE, cache = TRUE}
+scenarios <- tibble(
+  "Scenario" = 1:20,
+  "$\\delta$" = rep(0.03, 20),
+  "$\\theta_0$" = rep(0.03, 20),
+  "$\\theta^\\star$" = rep(c(0.03, 0.05, 0.08, 0.10), each = 5),
+  "$\\underbar c_k$" = rep(c(0.025), 20),
+  "$\\bar c_k$" = rep(c(0.95, 0.96, 0.97, 0.98, 0.99), 4))
+# kable(scenarios, format = "latex", escape = F, booktabs = T, longtable = F,
+#       caption = "Scenarios considered.") %>% 
+#   kable_styling(latex_options = "hold_position")
+
+for(i in 1:nrow(scenarios)) {
+  sc_res <- sim_scenario(n_sims, 
+                         d = as.numeric(scenarios[i, 2]),
+                         p0 = as.numeric(scenarios[i, 3]),
+                         ptru = as.numeric(scenarios[i, 4]),
+                         nint = seq(50, 500, 50),
+                         k_non = as.numeric(scenarios[i, 6]), 
+                         k_inf = as.numeric(scenarios[i, 5]))
+  assign(paste0("sc_", i), c("Scenario" = i, summarise_scenario(sc_res)))
+}
+cbind(scenarios[, c(1, 4, 5, 6)],
+      do.call(rbind.data.frame, lapply(paste0("sc_", 1:nrow(scenarios)), get))[,-1]) %>%
+  kable(escape = F, booktabs = T, align = "r",
+        caption = "Scenario simulation results.", 
+        digits = c(0, 2, 3, 2, rep(2, 3), 0, 0, rep(2, 2)),
+        col.names = c("Scenario",
+                      "$\\theta^\\star$",
+                      "$\\underbar c_k$",
+                      "$\\bar c_k$",
+                      "$\\mathbb P(\\text{non-inferior})$",
+           "$\\mathbb P(\\text{inferior})$",
+           "$\\mathbb P(\\text{stop early})$",
+           "$\\mathbb E(\\text{N})$",
+           "$\\sqrt{\\mathbb V(\\text{N})}$",
+           "$\\overline{\\mathbb E[\\theta]}$",
+           "$\\overline{\\sqrt{\\mathbb V[\\theta]}}$")) %>% 
+  kable_styling(latex_options = "hold_position") 
+```
+
+\clearpage
+
+## Scenario - $\theta_0 = 0.07$ and $\tau = 0.03$
+
+```{r, eval=TRUE, include=TRUE, echo=FALSE, cache = TRUE}
+scenarios <- tibble(
+  "Scenario" = 1:20,
+  "$\\delta$" = rep(0.03, 20),
+  "$\\theta_0$" = rep(0.07, 20),
+  "$\\theta^\\star$" = rep(c(0.03, 0.05, 0.08, 0.10), each = 5),
+  "$\\underbar c_k$" = rep(c(0.025), 20),
+  "$\\bar c_k$" = rep(c(0.95, 0.96, 0.97, 0.98, 0.99), 4))
+# kable(scenarios, format = "latex", escape = F, booktabs = T, longtable = F,
+#       caption = "Scenarios considered.") %>% 
+#   kable_styling(latex_options = "hold_position")
+
+for(i in 1:nrow(scenarios)) {
+  sc_res <- sim_scenario(n_sims, 
+                         d = as.numeric(scenarios[i, 2]),
+                         p0 = as.numeric(scenarios[i, 3]),
+                         ptru = as.numeric(scenarios[i, 4]),
+                         nint = seq(50, 500, 50),
+                         k_non = as.numeric(scenarios[i, 6]), 
+                         k_inf = as.numeric(scenarios[i, 5]))
+  assign(paste0("sc_", i), c("Scenario" = i, summarise_scenario(sc_res)))
+}
+cbind(scenarios[, c(1, 4, 5, 6)],
+      do.call(rbind.data.frame, lapply(paste0("sc_", 1:nrow(scenarios)), get))[,-1]) %>%
+  kable(escape = F, booktabs = T, align = "r",
+        caption = "Scenario simulation results.", 
+        digits = c(0, 2, 3, 2, rep(2, 3), 0, 0, rep(2, 2)),
+        col.names = c("Scenario",
+                      "$\\theta^\\star$",
+                      "$\\underbar c_k$",
+                      "$\\bar c_k$",
+                      "$\\mathbb P(\\text{non-inferior})$",
+           "$\\mathbb P(\\text{inferior})$",
+           "$\\mathbb P(\\text{stop early})$",
+           "$\\mathbb E(\\text{N})$",
+           "$\\sqrt{\\mathbb V(\\text{N})}$",
+           "$\\overline{\\mathbb E[\\theta]}$",
+           "$\\overline{\\sqrt{\\mathbb V[\\theta]}}$")) %>% 
+  kable_styling(latex_options = "hold_position") 
+```
