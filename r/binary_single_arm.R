@@ -1,3 +1,30 @@
+dbetabinom <- function(x, n, a = 1, b = 1){
+  num <- lgamma(a + b) + lgamma(n + 1) + lgamma(x + a) + lgamma(n - x + b)
+  den <- lgamma(a) + lgamma(b) + lgamma(x + 1) + lgamma(n - x + 1) + lgamma(n + a + b)
+  prob <- exp(num - den)
+  prob
+}
+
+hdiBeta <- function(p = 0.95, a, b) {
+  if (a == b) {
+    lower <- qbeta((1-p)/2, a, b)
+    upper <- qbeta((1+p)/2, a, b)
+  } else if ((a <= 1) & (b > 1)) {
+    lower <- 0
+    upper <- qbeta(p, a, b)
+  } else if ((a > 1) & (b <= 1)) {
+    lower <- qbeta(1-p, a, b)
+    upper <- 1
+  } else {
+    zerofn <- function(x){(dbeta(qbeta(p+pbeta(x,a,b),a,b),a,b)-dbeta(x,a,b))^2}
+    maxl <- qbeta(1-p,a,b)
+    res <- optimize(zerofn,interval=c(0,maxl))
+    lower <- res$minimum; upper=qbeta(p+pbeta(lower,a,b),a,b)
+  }
+  c(lower,upper)
+}
+
+
 # Simulate Bayesian single-arm non-inferiority trial
 # with early termination for inferiority/non-inferiority
 # Model:
@@ -107,3 +134,118 @@ trial_decision <- function(sim_trial, k_non = 0.975, k_inf = 0.025) {
     }
   }
 }
+
+trial_decision_pp <- function(sim_trial, k_non = 0.975, k_inf = 0.025, k_fut = 0.01, k_suc = 0.99) {
+  n_analyses <- nrow(sim_trial)
+  ptail <- sim_trial$ptail
+  p0 <- sim_trial$p0
+  d <- sim_trial$d
+  a <- sim_trial$a
+  b <- sim_trial$b
+  n <- sim_trial$n
+  n_max <- max(n)
+  
+  for(stage in 1:n_analyses) {
+    est <- a[stage] / (a[stage] + b[stage])
+    if(stage < n_analyses) {
+      n_rem <- n_max - n[stage]
+      y_suc <- which(pbeta(p0 + d, a[stage] + 0:n_rem, b[stage] + n_rem - 0:n_rem) > k_non) - 1
+      ppos <- sum(dbetabinom(y_suc, n_rem, a[stage], b[stage]))
+      if(ppos < k_fut) {
+        return(list(action = "stop", decision = "futile", stage = stage, est = est))
+      }
+      if(ppos > k_suc) {
+        return(list(action = "stop", decision = "predict success", stage = stage, est = est))
+      }
+    } else {
+      # Check non-inferiority
+      if(ptail[stage] > k_non) {
+        return(list(action = "none", decision = "non-inferior", stage = stage, est = est))
+      }
+      # Check inferiority
+      if(ptail[stage] <  k_inf) {
+        return(list(action = "none", decision = "inferior", stage = stage, est = est))
+      }
+      return(list(action = "none", decision = "inconclusive", stage = stage, est = est))
+    }
+  }
+}
+
+### TESTING ###
+
+# library(dplyr)
+# 
+# sce <- sim_scenario(1000, ptru = 0.08)
+# 
+# # Apply decision rules and record frequentist results
+# 
+# get_results <- function(case, k_non, k_inf) {
+#   dec <- cbind(
+#     trial_id = 1:length(sce),
+#     do.call(rbind.data.frame,
+#             lapply(sce, 
+#                    trial_decision, 
+#                    k_non = k_non,
+#                    k_inf = k_inf)))
+#   dec_df <- dec %>% 
+#     group_by(stage) %>% 
+#     summarise(y_non = sum(decision == "non-inferior"),
+#               y_inf = sum(decision == "inferior")) %>% 
+#     ungroup() %>% 
+#     mutate(case = case,
+#            y_non_c = cumsum(y_non),
+#            y_inf_c = cumsum(y_inf), 
+#            p_non_c = y_non_c / 1000,
+#            p_inf_c = y_inf_c / 1000) %>%
+#     select(case, stage, y_non_c, y_inf_c, p_non_c, p_inf_c)
+#   return(bind_rows(tibble(case = case, stage = 0, y_non_c = 0, y_inf_c = 0, p_non_c = 0, p_inf_c = 0), dec_df))
+# }
+# 
+# k_non <- seq(0.90, 0.99, 0.01)
+# out <- do.call(rbind.data.frame, lapply(1:length(k_non), function(i) get_results(i, k_non[i], 0.025)))
+# ggplot(out, aes(stage, p_non_c, colour = factor(case), group = case)) + 
+#   geom_line()
+# 
+# sce <- sim_scenario(1000, ptru = 0.1)
+# 
+# 
+# dec1 <- cbind(
+#   trial_id = 1:length(sce),
+#   do.call(rbind.data.frame,
+#           lapply(sce, 
+#                  trial_decision, 
+#                  k_non = seq(0.99, 0.975, length.out = 9),
+#                  k_inf = seq(0.01, 0.025, length.out = 9))))
+# dec2 <- cbind(
+#   trial_id = 1:length(sce),
+#   do.call(rbind.data.frame,
+#           lapply(sce, 
+#                  trial_decision, 
+#                  k_non = rep(0.975, 9),
+#                  k_inf = rep(0.05, 9))))
+# 
+# prop.table(table(dec1$decision))
+# prop.table(table(dec2$decision))
+# 
+# cp <- dec2 %>% 
+#   group_by(stage) %>% 
+#   summarise(y_non = sum(decision == "non-inferior"),
+#             y_inf = sum(decision == "inferior")) %>% 
+#   ungroup() %>% 
+#   mutate(y_non_c = cumsum(y_non),
+#          y_inf_c = cumsum(y_inf), 
+#          p_non_c = y_non_c / 1000,
+#          p_inf_c = y_inf_c / 1000)
+# 
+# 
+# dec1 <- cbind(trial_id = 1:1000, do.call(rbind.data.frame, lapply(sce, trial_decision)))
+# dec2 <- cbind(trial_id = 1:1000, do.call(rbind.data.frame, lapply(sce, trial_decision_pp)))
+# 
+# # Average sample size
+# mean(do.call(c, lapply(1:1000, function(i) sce[[i]][dec1$stage[i], "n"])))
+# mean(do.call(c, lapply(1:1000, function(i) sce[[i]][dec2$stage[i], "n"])))
+# 
+# # How many predicited success trials did not end in success?
+# mean(do.call(rbind, lapply(sce[dec2[dec2$decision == "predict success", "trial_id"]], "[", 9, "ptail", drop = F)) > 0.975)
+# # How many trials stopped for futility would have ended in success?
+# mean(do.call(rbind, lapply(sce[dec2[dec2$decision == "futile", "trial_id"]], "[", 9, "ptail", drop = F)) > 0.975)

@@ -66,8 +66,8 @@ The end-point is 7-day re-admission. This would imply that at any stage of analy
 Assume that the historical baseline rate is $\theta_0$, and we wish to assess the response rate under the new policy, denoted $\theta$. We decalre the new rate acceptable if it is within some tolerance $\tau$ of the historical rate. That is, we aim to assess the following:
 $$
 \begin{aligned}
-&H_0:\theta > \theta_0 + \tau\quad\text{(inferior)} \\
-&H_1:\theta \leq \theta_0 + \tau\quad\text{(non-inferior)}
+&H_0:\theta \geq \theta_0 + \tau\quad\text{(non-safe/inferior)} \\
+&H_1:\theta < \theta_0 + \tau\quad\text{(safe/non-inferior)}
 \end{aligned}
 $$
 and make a decision as to whether the response rate under the policy change is within the allowed tolerance.
@@ -92,6 +92,7 @@ f(y_k|\theta) &= \text{Binomial}(N_k, \theta) \\
 P_k &= \int_0^{\theta_0+\tau} \pi_k(\theta|y_k) d\theta
 \end{aligned}.
 $$
+We have assumed that the response rate does not "drift" over the course of the trial.
 
 We base our decisions rules at stage $k$ on the posterior probability of the non-inferiority hypotheses at stage $k$ as follows
 $$
@@ -109,12 +110,16 @@ s_k(y_k) = \mathbb I_{\{a_0,a_1\}}[\delta_k(y_k)]
 $$
 which has stopping time (sample size) $\eta_k = \min\left\{k\in\{1,...,K\}|s_k(y_k)=1,\sum_{j=1}^{k-1}s_j(y_{j}) = 0\right\}$.
 
-For a fixed historical rate, $\theta_0$, tolerance level, $\tau$, new response rate, $\theta^\star$, and assuming the same probability cut-points for every interim analyiss, there are two tunable parameters $(\underbar c, \bar c)$. Simulations are used to estimate the following quantities of interest under various scenarios of assumed values for $(\theta_0, \tau, \theta^\star, \underbar c, \bar c)$:
+Simulations are used to estimate the following quantities of interest under various scenarios of assumed values for $(\theta_0, \tau, \theta^\star, \underbar c, \bar c)$:
 
   * $\mathbb P_{H_0}(a_1)$ the probability we declare inferiority
   * $\mathbb P_{H_1}(a_0)$ the probability we declare non-inferiority
   * $\mathbb E^{\theta^\star}[N_\tau]$ the expected sample size under $\theta = \theta^\star$
   * $\overline{\mathbb E[\theta]}$ the expected estimate of the response rate under the new policy.
+
+For a fixed historical rate, $\theta_0$, tolerance level, $\tau$, new response rate, $\theta^\star$, there are tunable parameters $(\underbar c, \bar c)$ which can be used to control the above quantities of interest at an acceptable level. 
+
+
   
 \clearpage
 
@@ -123,7 +128,7 @@ For a fixed historical rate, $\theta_0$, tolerance level, $\tau$, new response r
 For each scenario considered, quantities were estimated based on 10,000 simulations.
 
 ```{r, eval=TRUE}
-n_sims <- 1e4
+n_sims <- 1e3
 ```
 
 ## Scenarios
@@ -179,8 +184,10 @@ bind_cols(scenarios,
   collapse_rows(latex_hline = "none", valign = "top")
 ```
 
+For trials which allow for early stopping, we set interim analyses every 50 individuals with follow-up with the first analysis at 100 patients. That is, we undertake analyses at $\{100, 150, 200, ..., 400, 450, 500\}$.
 
-```{r, eval=TRUE, include=TRUE, echo=FALSE}
+
+```{r, eval=TRUE, include=TRUE, echo=FALSE, cache = TRUE}
 # Simulate Bayesian single-arm non-inferiority trial
 # with early termination for inferiority/non-inferiority
 # Model:
@@ -206,12 +213,20 @@ sim_trial <- function(
   ptru   = 0.08,
   p0     = 0.05,
   d      = 0.03,
-  nint   = seq(50, 100, 5),
+  nint   = seq(100, 500, 50),
   k_non  = 0.975,
   k_inf  = 0.025,
   a      = 1,
   b      = 1
 ) {
+  
+  n_analyses <- length(nint)
+  
+  # Perform input checks...
+  if((length(k_non) > 1 && length(k_non) != n_analyses) ||
+     (length(k_inf) > 1 && length(k_inf) != n_analyses))
+    stop("Interim and cut-off dimensions do not match")
+  
   # Generate data
   x <- cumsum(rbinom(length(nint), diff(c(0, nint)), ptru))
   
@@ -227,22 +242,24 @@ sim_trial <- function(
     
     # Decision rule
     if(interim < length(nint)) {
+      c_non <- ifelse(length(k_non) == 1, k_non, k_non[interim])
+      c_inf <- ifelse(length(k_inf) == 1, k_inf, k_inf[interim])
       # Check non-inferiority
-      if(ptail > k_non) {
+      if(ptail > c_non) {
         return(list(action = "stop", decision = "non-inferior", n = ncurr, ptail = ptail))
       }
       # Check inferiority
-      if(ptail < k_inf) {
+      if(ptail < c_inf) {
         return(list(action = "stop", decision = "inferior", n = ncurr, ptail = ptail))
       }
       return(list(action = "continue", decision = "", n = ncurr, ptail = ptail)) 
     } else {
       # Check non-inferiority
-      if(ptail > k_non) {
+      if(ptail > tail(k_non, 1)) {
         return(list(action = "none", decision = "non-inferior", n = ncurr, ptail = ptail))
       }
       # Check inferiority
-      if(ptail < k_inf) {
+      if(ptail < tail(k_inf, 1)) {
         return(list(action = "none", decision = "inferior", n = ncurr, ptail = ptail))
       }
       return(list(action = "none", decision = "inconclusive", n = ncurr, ptail = ptail))
@@ -253,7 +270,7 @@ sim_trial <- function(
   intr <- lapply(1:length(nint), sim_interim)
   # Collect the results
   do.call(rbind, intr)
-  sim_trial <- data.frame(sim_id = sim_id, stage = 1:length(nint), do.call(rbind.data.frame, intr))
+  sim_trial <- data.frame(sim_id = sim_id, stage = 1:length(nint), y = x, do.call(rbind.data.frame, intr))
   # Check the trial outcome and return trial quantities
   stopi <- match("stop", sim_trial$action)
   if(is.na(stopi)) {
@@ -370,12 +387,12 @@ cbind(k_inf[-1], p_inf[-1])[cp, ]
 
 ```{r, eval=TRUE, include=TRUE, echo=FALSE, cache = TRUE}
 scenarios <- tibble(
-  "Scenario" = 1:20,
-  "$\\delta$" = rep(0.03, 20),
-  "$\\theta_0$" = rep(0.05, 20),
-  "$\\theta^\\star$" = rep(c(0.03, 0.05, 0.08, 0.10), each = 5),
-  "$\\underbar c_k$" = rep(c(0.025), 20),
-  "$\\bar c_k$" = rep(c(0.95, 0.96, 0.97, 0.98, 0.99), 4))
+  "Scenario" = 1:40,
+  "$\\delta$" = rep(0.03, 40),
+  "$\\theta_0$" = rep(0.05, 40),
+  "$\\theta^\\star$" = rep(c(0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10), each = 5),
+  "$\\underbar c_k$" = rep(c(0.05, 0.04, 0.03, 0.02, 0.01), 8),
+  "$\\bar c_k$" = rep(c(0.95, 0.96, 0.97, 0.98, 0.99), 8))
 # kable(scenarios, format = "latex", escape = F, booktabs = T, longtable = F,
 #       caption = "Scenarios considered.") %>% 
 #   kable_styling(latex_options = "hold_position")
@@ -385,7 +402,6 @@ for(i in 1:nrow(scenarios)) {
                          d = as.numeric(scenarios[i, 2]),
                          p0 = as.numeric(scenarios[i, 3]),
                          ptru = as.numeric(scenarios[i, 4]),
-                         nint = seq(50, 500, 50),
                          k_non = as.numeric(scenarios[i, 6]), 
                          k_inf = as.numeric(scenarios[i, 5]))
   assign(paste0("sc_", i), c("Scenario" = i, summarise_scenario(sc_res)))
@@ -410,21 +426,15 @@ cbind(scenarios[, c(1, 4, 5, 6)],
 ```
 
 
+### Cut-offs $\underbar c = (0.01, 0.01, 0.025, ...)$ and $\bar c = (0.99, 0.99, 0.975, ...)$
 
-
-
-\clearpage
-
-## Scenario - $\theta_0 = 0.03$ and $\tau = 0.03$
 
 ```{r, eval=TRUE, include=TRUE, echo=FALSE, cache = TRUE}
 scenarios <- tibble(
-  "Scenario" = 1:20,
-  "$\\delta$" = rep(0.03, 20),
-  "$\\theta_0$" = rep(0.03, 20),
-  "$\\theta^\\star$" = rep(c(0.03, 0.05, 0.08, 0.10), each = 5),
-  "$\\underbar c_k$" = rep(c(0.025), 20),
-  "$\\bar c_k$" = rep(c(0.95, 0.96, 0.97, 0.98, 0.99), 4))
+  "Scenario" = 1:8,
+  "$\\delta$" = rep(0.03, 8),
+  "$\\theta_0$" = rep(0.05, 8),
+  "$\\theta^\\star$" = c(0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10))
 # kable(scenarios, format = "latex", escape = F, booktabs = T, longtable = F,
 #       caption = "Scenarios considered.") %>% 
 #   kable_styling(latex_options = "hold_position")
@@ -434,20 +444,17 @@ for(i in 1:nrow(scenarios)) {
                          d = as.numeric(scenarios[i, 2]),
                          p0 = as.numeric(scenarios[i, 3]),
                          ptru = as.numeric(scenarios[i, 4]),
-                         nint = seq(50, 500, 50),
-                         k_non = as.numeric(scenarios[i, 6]), 
-                         k_inf = as.numeric(scenarios[i, 5]))
+                         k_non = c(rep(0.99, 2), rep(0.975, 7)), 
+                         k_inf = c(rep(0.01, 2), rep(0.025, 7)))
   assign(paste0("sc_", i), c("Scenario" = i, summarise_scenario(sc_res)))
 }
-cbind(scenarios[, c(1, 4, 5, 6)],
+cbind(scenarios[, c(1, 4)],
       do.call(rbind.data.frame, lapply(paste0("sc_", 1:nrow(scenarios)), get))[,-1]) %>%
   kable(escape = F, booktabs = T, align = "r",
         caption = "Scenario simulation results.", 
-        digits = c(0, 2, 3, 2, rep(2, 3), 0, 0, rep(2, 2)),
+        digits = c(0, 2, 2, 2, 2, 0, 0, 2, 2),
         col.names = c("Scenario",
                       "$\\theta^\\star$",
-                      "$\\underbar c_k$",
-                      "$\\bar c_k$",
                       "$\\mathbb P(\\text{non-inferior})$",
            "$\\mathbb P(\\text{inferior})$",
            "$\\mathbb P(\\text{stop early})$",
@@ -458,18 +465,14 @@ cbind(scenarios[, c(1, 4, 5, 6)],
   kable_styling(latex_options = "hold_position") 
 ```
 
-\clearpage
-
-## Scenario - $\theta_0 = 0.07$ and $\tau = 0.03$
+### Cut-offs $\underbar c = (0.01, 0.01, 0.025, 0.025, 0.05, ...)$ and $\bar c = (0.99, 0.99, 0.975, 0.975, 0.95, ...)$
 
 ```{r, eval=TRUE, include=TRUE, echo=FALSE, cache = TRUE}
 scenarios <- tibble(
-  "Scenario" = 1:20,
-  "$\\delta$" = rep(0.03, 20),
-  "$\\theta_0$" = rep(0.07, 20),
-  "$\\theta^\\star$" = rep(c(0.03, 0.05, 0.08, 0.10), each = 5),
-  "$\\underbar c_k$" = rep(c(0.025), 20),
-  "$\\bar c_k$" = rep(c(0.95, 0.96, 0.97, 0.98, 0.99), 4))
+  "Scenario" = 1:8,
+  "$\\delta$" = rep(0.03, 8),
+  "$\\theta_0$" = rep(0.05, 8),
+  "$\\theta^\\star$" = c(0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10))
 # kable(scenarios, format = "latex", escape = F, booktabs = T, longtable = F,
 #       caption = "Scenarios considered.") %>% 
 #   kable_styling(latex_options = "hold_position")
@@ -479,20 +482,19 @@ for(i in 1:nrow(scenarios)) {
                          d = as.numeric(scenarios[i, 2]),
                          p0 = as.numeric(scenarios[i, 3]),
                          ptru = as.numeric(scenarios[i, 4]),
-                         nint = seq(50, 500, 50),
-                         k_non = as.numeric(scenarios[i, 6]), 
-                         k_inf = as.numeric(scenarios[i, 5]))
+                         k_non = c(rep(0.99, 2), rep(0.975, 2), rep(0.95, 5)), 
+                         k_inf = c(rep(0.01, 2), rep(0.025, 2), rep(0.05, 5)))
+  sc_res[[2]]$scenario <- i
   assign(paste0("sc_", i), c("Scenario" = i, summarise_scenario(sc_res)))
+  assign(paste0("nplot_", i), ggplot(sc_res[[2]], aes(samples)) + geom_bar(aes(y = ..prop..)))
 }
-cbind(scenarios[, c(1, 4, 5, 6)],
+cbind(scenarios[, c(1, 4)],
       do.call(rbind.data.frame, lapply(paste0("sc_", 1:nrow(scenarios)), get))[,-1]) %>%
   kable(escape = F, booktabs = T, align = "r",
         caption = "Scenario simulation results.", 
-        digits = c(0, 2, 3, 2, rep(2, 3), 0, 0, rep(2, 2)),
+        digits = c(0, 2, 2, 2, 2, 0, 0, 2, 2),
         col.names = c("Scenario",
                       "$\\theta^\\star$",
-                      "$\\underbar c_k$",
-                      "$\\bar c_k$",
                       "$\\mathbb P(\\text{non-inferior})$",
            "$\\mathbb P(\\text{inferior})$",
            "$\\mathbb P(\\text{stop early})$",
@@ -501,4 +503,12 @@ cbind(scenarios[, c(1, 4, 5, 6)],
            "$\\overline{\\mathbb E[\\theta]}$",
            "$\\overline{\\sqrt{\\mathbb V[\\theta]}}$")) %>% 
   kable_styling(latex_options = "hold_position") 
+
+pdat <- do.call(rbind.data.frame, lapply(1:8, function(i) get(paste0("nplot_", i))$data))
+ggplot(pdat,
+       aes(x = factor(samples), y = scenario, group = scenario)) +
+  geom_density_ridges2(stat = "binline", scale = 0.95, binwidth = 0.5) +
+  labs(x = "Sample size") +
+  scale_y_continuous("True rate", breaks = 1:8, labels = c(0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10)) +
+  coord_flip()
 ```

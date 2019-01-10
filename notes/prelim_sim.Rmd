@@ -1,5 +1,5 @@
 ---
-title: "FeBRILe3 - Preliminary Simulations"
+title: "FeBRILe3 - Simulation Notes"
 subtitle: "Fever, Blood cultures and Readiness for discharge in Infants Less than 3 months old"
 author: "James Totterdell"
 date: "`r Sys.Date()`"
@@ -39,21 +39,7 @@ ggplot2::theme_set(
 ```
 
 
-# Thoughts
-
-Is seasonality an issue which needs to be considered? Any reason to suspect different re-admission rates by time of year? Say, re-admission higher in winter and first interim based on data obtained during June to August, might we conclude inferiority, but only because higher baseline in winter than rest of year?
-
-Single-arm means observational, no randomisation to treatment. We are not using a historical control, but instead using "objective performance criteria" (OPC) derived from historical data from registries. The OPC is a fixed bar for performance in lieu of a control group used as a comparator in single-arm trials. Used for comparison in safety end-points.
-
-The OPC needs to be based on the same population (low-risk infants etc.). Do we know what population was used to derive the historical rates etc.?
-
-Would this really be called a "non-inferiority" or just safety trial?
-
-We should really include some measure of variability in the historical estimate. What data is this estimate based on? How far back does it go (based on last 12 months, last 10 years, may change over time)? How was it calculated? Do we have access to this data? Estimate of precision?
-
-
-
-# Background
+# Background and Rationale
 
 Distinguishing between benign, self-limiting viral infections and serious bacterial infections in young infants <3 months old with fever is a daily challenge for paediatricians worldwide. As a result, these infants undergo invasive investigations (including blood, urine and spinal fluid samples) to look for bacterial infection and stay in hospital for at least 48 hours on intravenous antibiotics until bacterial infection has been excluded. However, recent international studies support change to this practice by demonstrating that nearly all infants with bacteria in their blood will have a positive blood culture test by 24 hours and it is not necessary to wait 48 hours to show the test is negative.
 
@@ -75,11 +61,11 @@ Inclusion/exclusion criteria...
 
 The trial is expected to run for up to two years and the expectation is that up to 500 individuals may be enrolled over the course of the study. The end-point is 7-day re-admission, so any issues around accrual rates are neglibile.
 
+We assume accrual of about 5 individuals per week to achieve at least 500 individuals over the two year period. This would imply that, at any stage of analysis, about 5 individuals would be without 7-day follow-up. This could be incoporated into the analysis by using calculations for expected success given enrolees with follow-up.
+
 # Statistical Analysis
 
-Assume that the historical baseline rate is $\theta_0$, and we will allow the policy change to produce the same rate within some tolerance $\delta$. The new rate under the policy change is $\theta$. 
-
-
+Assume that the historical baseline rate is $\theta_0$, and we wish to assess the response rate under the new policy, denoted $\theta$. We decalre the new rate acceptable if it is within some tolerance $\tau$ of the historical rate. will allow the policy change to produce the same rate within some tolerance $\delta$. The new rate under the policy change is $\theta$. 
 
 We are interested in assessing
 $$
@@ -90,13 +76,13 @@ $$
 $$
 and declaring the policy change non-inferior or inferior.
 
-For now we will assume $\theta_0$ is known exactly, however, it may be more realstic to assume some distribution $\theta_0\sim\text{Beta}(\alpha_0,\beta_0)$ such that $\alpha_0/(\alpha_0+\beta_0)$ is equal to the historical estimate. The variance could be based on how the estimate of the historical rate was obtained, or on our confidence in the estimate. Perhaps different rates should also be assumed for each site, but for now this is not considered.
+For now we will assume $\theta_0$ is known exactly, however, it may be more realstic to assume some distribution $\theta_0\sim\text{Beta}(\alpha_0,\beta_0)$ such that $\alpha_0/(\alpha_0+\beta_0)$ is equal to the historical estimate and is distributed with an appropriate variance. The variance could be based on how the estimate of the historical rate was obtained, or on our confidence in the estimate.
 
 The new rate following the change in policy, and the number of responses observed, will be modelled by a Beta-Binomial model. We pre-specify analysis stages at points $k=1,...,K$ and define
 $$
 \begin{aligned}
 n_k &= \text{the number of enrolees since stage } k-1 \\
-x_k &= \text{the number of re-admissions within 7-days of discharge since stage }k-1 \\
+x_k &= \text{the number of re-admissions since stage }k-1 \\
 x_k &\sim \text{Binomial}(n_k, \theta) \\
 N_k = \sum_{i=1}^k n_i &= \text{the total sample size at stage } k \\
 y_k = \sum_{i=1}^k x_i &= \text{the total number of re-admissions by stage } k \\
@@ -157,7 +143,7 @@ We specify a a corresponding non-informative deterministic stopping rule $\tau_n
 $$
 \tau_k(y_k) = \mathbb I_{\{a_0,a_1\}}[\delta_k(y_k)]
 $$
-which has stopping time (sample size) $N_k = \min\left\{k\in\{1,...,K\}|\tau_k(y_k)=1,\sum_{j=1}^{k-1}\tau_j(y_{j}) = 0\right\}$.
+which has stopping time (sample size) $\eta_k = \min\left\{k\in\{1,...,K\}|\tau_k(y_k)=1,\sum_{j=1}^{k-1}\tau_j(y_{j}) = 0\right\}$.
 
 Assuming we use the same cut-offs for every analysis stage then in the posterior case, there are three tunable parameters $(\delta, \underbar c, \bar c)$ and in the predicitive posterior case, there are four tunable parameters $(\delta, \underbar c, \bar c, C)$. Perhaps $\delta$ would also be considered fixed if we have a known meaningful tolerance level.
 
@@ -228,7 +214,7 @@ for(i in 1:nrow(scenarios)) {
   p0 <- as.numeric(scenarios[i, 3])
   ptru <- as.numeric(scenarios[i, 4])
   i_non <- which(pbeta(p0 + d, a + n, b + nmax - n) > k_non) - 1
-  i_inf <- which(pbeta(p0 + d, a + n, b + nmax - n) < k_inf) - 1
+  i_inf <- which(pbeta(p0, a + n, b + nmax - n) < k_inf) - 1
   p_non[i] <- sum(dbinom(i_non, nmax, ptru))
   p_inf[i] <- sum(dbinom(i_inf, nmax, ptru))
 }
@@ -291,7 +277,7 @@ sim_trial <- function(
   d      = 0.03,
   nint   = seq(50, 100, 5),
   k_non  = 0.975,
-  k_inf  = 0,
+  k_inf  = 0.025,
   a      = 1,
   b      = 1
 ) {
@@ -328,8 +314,8 @@ sim_trial <- function(
       if(ptail < k_inf) {
         return(list(action = "none", decision = "inferior", n = ncurr, ptail = ptail))
       }
-      # return(list(action = "none", decision = "inconclusive", n = ncurr, ptail = ptail))
-      return(list(action = "none", decision = "inferior", n = ncurr, ptail = ptail))
+      return(list(action = "none", decision = "inconclusive", n = ncurr, ptail = ptail))
+      # return(list(action = "none", decision = "inferior", n = ncurr, ptail = ptail))
     }
   }
   # Iterate through all the interims
@@ -391,7 +377,9 @@ summarise_scenario <- function(sim_results, ...) {
 }
 
 
-example_trial <- sim_trial(nint = seq(50, 500, 50))
+example_trial <- sim_trial(nint = seq(45, 500, 35), ptru = 0.05)
+example_scenario <- sim_scenario(1000, nint = seq(45, 500, 35), ptru = 0.05)
+example_summary <- summarise_scenario(example_scenario)
 
 cl <- makeCluster(4)
 registerDoParallel(cl)
@@ -406,7 +394,7 @@ for(i in 1:nrow(scenarios)) {
 }
 bind_rows(sc_1, sc_2, sc_3, sc_4, sc_5, sc_6, sc_7, sc_8, sc_9) %>%
   kable(escape = F, booktabs = T, align = "r",
-        caption = "Scenario simulation results.", digits = c(0, rep(3, 3), 0, 0, rep(2, 2)),
+        caption = "Scenario simulation results.", digits = c(0, rep(3, 3), 0, 0, rep(3, 2)),
         col.names = c("Scenario", 
                       "$\\mathbb P(\\text{non-inferior})$",
            "$\\mathbb P(\\text{inferior})$",
