@@ -3,6 +3,7 @@
 .RData
 .Ruserdata
 *.pdf
+*.ppt
 out/
 docs/
 *_cache
