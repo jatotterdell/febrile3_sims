@@ -104,6 +104,7 @@ sim_trial <- function(
 # with the same set of parameters
 sim_scenario <- function(sims, ...) {
   require(doParallel)
+  require(rmutil)
   res <- foreach(i = 1:sims, .packages = "rmutil", .export = "sim_trial") %dopar% {
     sim_trial(i, ...)
   }
