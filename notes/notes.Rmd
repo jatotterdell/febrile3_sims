@@ -1,0 +1,36 @@
+---
+title: "FeBRILe3 - Notes"
+subtitle: "Fever, Blood cultures and Readiness for discharge in Infants Less than 3 months old"
+author: "James Totterdell"
+date: "`r Sys.Date()`"
+output: 
+  bookdown::pdf_document2:
+    fig_caption: yes
+new_session: true
+delete_merged_file: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	eval = FALSE,
+	message = FALSE,
+	warning = FALSE,
+	include = FALSE
+)
+
+options(stringsAsFactors = FALSE)
+```
+
+# Thoughts
+
+Really, this is just a rate estimation exercise where each individual has constant 7-day follow-up and the event either does or does not occur within the 7-days. We then assess our posterior for the rate and make a decision about the acceptability of the rate with reference to a historical rate (our "performance criteria").
+
+Different rates for each site? Justification for pooling different data across sites -> common site protocols, matching historical rates etc...?
+
+Is seasonality an issue which needs to be considered? Any reason to suspect different re-admission rates by time of year? Say, re-admission higher in winter and first interim based on data obtained during June to August, might we conclude inferiority, but only because higher baseline in winter than rest of year?
+
+Single-arm means observational, no randomisation to treatment. We are not using a historical control, but instead using "objective performance criteria" (OPC) derived from historical data from registries. The OPC is a fixed bar for performance in lieu of a control group used as a comparator in single-arm trials. Used for comparison in safety end-points.
+
+The OPC needs to be based on the same population (low-risk infants etc.). Do we know what population was used to derive the historical rates etc.?
+
+We should really include some measure of variability in the historical estimate. What data is this estimate based on? How far back does it go (based on last 12 months, last 10 years, may change over time)? How was it calculated? Do we have access to this data? Estimate of precision? Our tolerance level of 3% somewhat accounts for variability on the historical estimate.
