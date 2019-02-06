@@ -37,6 +37,7 @@ library(latex2exp)
 library(gridExtra)
 library(data.table)
 library(ggridges)
+library(prevalence)
 
 ggplot2::theme_set(
   ggplot2::theme_bw(base_size = 9) + 
