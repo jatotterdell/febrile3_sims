@@ -29,6 +29,8 @@ library(knitr)
 library(kableExtra)
 library(doParallel)
 library(latex2exp)
+library(ggplot2)
+library(ggridges)
 
 ggplot2::theme_set(
   ggplot2::theme_bw(base_size = 9) + 
@@ -57,7 +59,7 @@ The primary outcome is the proportion of low-risk infants discharged before the 
 
 # Sample Size and Accrual
 
-The trial is expected to run for up to two years and the expectation is that up to 500 individuals may be enrolled over the course of the study. Therefore, we estimate assume accrual of about 5 individuals per week to achieve 500 individuals over the two year period.
+The trial is expected to run for up to two years and the expectation is that up to 500 individuals may be enrolled over the course of the study. Therefore, we've assumed accrual of about 5 individuals per week to achieve 500 individuals over the two year period.
 
 The end-point is 7-day re-admission. This would imply that at any stage of analysis, about 5 individuals may be enrolled without their 7-day follow-up information. This additional uncertainty could be incoporated into the analysis through the use of posterior predictive probabilities for the missing data.
 
@@ -143,9 +145,6 @@ scenarios <- tibble(
   "$\\theta^\\star$" = c(0.06, 0.03, 0.09, 0.08, 0.05, 0.11, 0.10, 0.07, 0.13),
   "$\\underbar c_k$" = rep(0.025, 9),
   "$\\bar c_k$" = rep(0.975, 9))
-# kable(scenarios, format = "latex", escape = F, booktabs = T, longtable = F,
-#       caption = "Scenarios considered.") %>% 
-#   kable_styling(latex_options = "hold_position")
 ```
 
 
@@ -161,8 +160,8 @@ fixed_trial <- function(
   b      = 1
 ) {
   n <- 0:nmax
-  i_non <- which(pbeta(p0 + d, a + n, b + nmax - n) > k_non) - 1
-  i_inf <- which(pbeta(p0 + d, a + n, b + nmax - n) < k_inf) - 1
+  i_non <- which(pbeta(p0 + d, a + n, b + nmax - n) >= k_non) - 1
+  i_inf <- which(pbeta(p0 + d, a + n, b + nmax - n) <= k_inf) - 1
   p_non <- sum(dbinom(i_non, nmax, ptru))
   p_inf <- sum(dbinom(i_inf, nmax, ptru))
   return(c(p_non, p_inf))
@@ -175,8 +174,8 @@ res <- t(sapply(1:nrow(scenarios), function(i) {
 }))
 
 bind_cols(scenarios, 
-          "$\\mathbb P[\\text{non-inferior}]$" = sprintf("%.2f", res[, 1]),
-          "$\\mathbb P[\\text{inferior}]$" = sprintf("%.2f", res[, 2])) %>%
+          "$\\mathbb P[\\text{non-inferior}]$" = sprintf("%.3f", res[, 1]),
+          "$\\mathbb P[\\text{inferior}]$" = sprintf("%.3f", res[, 2])) %>%
  kable(escape = F, booktabs = T, align = "r",
        caption = "Scenarios considered."
        ) %>% 
@@ -184,7 +183,37 @@ bind_cols(scenarios,
   collapse_rows(latex_hline = "none", valign = "top")
 ```
 
-For trials which allow for early stopping, we set interim analyses every 50 individuals with follow-up with the first analysis at 100 patients. That is, we undertake analyses at $\{100, 150, 200, ..., 400, 450, 500\}$.
+
+
+```{r scenarios2, eval=TRUE, include=TRUE, echo=FALSE}
+scenarios <- tibble(
+  "Scenario" = 1:25,
+  "$\\tau$" = rep(0.03, 25),
+  "$\\theta_0$" = rep(0.05, 25),
+  "$\\theta^\\star$" = rep(0.08, 25),
+  "$\\underbar c_k$" = rep(seq(0.01, 0.05, 0.01), 5),
+  "$\\bar c_k$" = rep(seq(0.95, 0.99, 0.01), each = 5))
+
+res <- t(sapply(1:nrow(scenarios), function(i) {
+  fixed_trial(d = as.numeric(scenarios[i, 2]),
+              p0 = as.numeric(scenarios[i, 3]),
+              ptru = as.numeric(scenarios[i, 4]),
+              k_non = as.numeric(scenarios[i, 6]),
+              k_inf = as.numeric(scenarios[i, 5]))
+}))
+
+bind_cols(scenarios[, c(5, 6)], 
+          "$\\mathbb P[\\text{non-inferior}]$" = sprintf("%.3f", res[, 1]),
+          "$\\mathbb P[\\text{inferior}]$" = sprintf("%.3f", res[, 2])) %>%
+  select(-`$\\mathbb P[\\text{inferior}]$`) %>%
+  spread(`$\\underbar c_k$`, `$\\mathbb P[\\text{non-inferior}]$`) %>%
+  rename(`$\\bar \\backslash \\underbar c$` = `$\\bar c_k$`) %>%
+  kable(escape = F, booktabs = T, align = "r",
+        caption = "Type I error fixed n = 500.") %>% 
+  kable_styling(latex_options = "hold_position")
+```
+
+For simulations allowing for early stopping, we set interim analyses every 50 individuals with follow-up with the first analysis at 100 patients. That is, we undertake analyses at $\{100, 150, 200, ..., 400, 450, 500\}$.
 
 
 ```{r, eval=TRUE, include=TRUE, echo=FALSE, cache = TRUE}
@@ -425,6 +454,7 @@ cbind(scenarios[, c(1, 4, 5, 6)],
   kable_styling(latex_options = "hold_position") 
 ```
 
+\clearpage
 
 ### Cut-offs $\underbar c = (0.01, 0.01, 0.025, ...)$ and $\bar c = (0.99, 0.99, 0.975, ...)$
 
@@ -464,6 +494,8 @@ cbind(scenarios[, c(1, 4)],
            "$\\overline{\\sqrt{\\mathbb V[\\theta]}}$")) %>% 
   kable_styling(latex_options = "hold_position") 
 ```
+
+\clearpage
 
 ### Cut-offs $\underbar c = (0.01, 0.01, 0.025, 0.025, 0.05, ...)$ and $\bar c = (0.99, 0.99, 0.975, 0.975, 0.95, ...)$
 
@@ -511,4 +543,73 @@ ggplot(pdat,
   labs(x = "Sample size") +
   scale_y_continuous("True rate", breaks = 1:8, labels = c(0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10)) +
   coord_flip()
+```
+
+
+\clearpage
+
+```{r, eval=TRUE, include=TRUE, echo=FALSE, cache = TRUE}
+scenarios <- tibble(
+  "Scenario" = 1:25,
+  "$\\delta$" = rep(0.03, 25),
+  "$\\theta_0$" = rep(0.05, 25),
+  "$\\theta^\\star$" = rep(0.08, 25),
+  "$\\bar c$" = rep(seq(0.95, 0.99, 0.01), each = 5),
+  "$\\underbar c$" = rep(seq(0.01, 0.05, 0.01), 5))
+
+cl <- makeCluster(4)
+registerDoParallel(cl)
+
+for(i in 1:nrow(scenarios)) {
+  sc_res <- sim_scenario(n_sims, 
+                         d = as.numeric(scenarios[i, 2]),
+                         p0 = as.numeric(scenarios[i, 3]),
+                         ptru = as.numeric(scenarios[i, 4]),
+                         k_non = as.numeric(scenarios[i, 5]), 
+                         k_inf = as.numeric(scenarios[i, 6]))
+  sc_res[[2]]$scenario <- i
+  assign(paste0("sc_", i), c("Scenario" = i, summarise_scenario(sc_res)))
+}
+d <- cbind(scenarios[, c(5, 6)],
+  do.call(rbind.data.frame, lapply(paste0("sc_", 1:nrow(scenarios)), get))[, c(2, 3)])
+colnames(d)[3:4] <- c("P_1", "P_0")
+td <- spread(d %>% select(1, 2, 3), `$\\underbar c$`, P_1)
+colnames(td)[1] <- "$\\bar c\\backslash \\underbar c$"
+td %>% 
+  kable(escape = F, booktabs = T, align = "r", caption = "True rate = 0.08 (null)") %>% 
+  kable_styling(latex_options = "hold_position")
+```
+
+
+
+```{r, eval=TRUE, include=TRUE, echo=FALSE, cache = TRUE}
+scenarios <- tibble(
+  "Scenario" = 1:25,
+  "$\\delta$" = rep(0.03, 25),
+  "$\\theta_0$" = rep(0.05, 25),
+  "$\\theta^\\star$" = rep(0.05, 25),
+  "$\\bar c$" = rep(seq(0.95, 0.99, 0.01), each = 5),
+  "$\\underbar c$" = rep(seq(0.01, 0.05, 0.01), 5))
+
+cl <- makeCluster(4)
+registerDoParallel(cl)
+
+for(i in 1:nrow(scenarios)) {
+  sc_res <- sim_scenario(n_sims, 
+                         d = as.numeric(scenarios[i, 2]),
+                         p0 = as.numeric(scenarios[i, 3]),
+                         ptru = as.numeric(scenarios[i, 4]),
+                         k_non = as.numeric(scenarios[i, 5]), 
+                         k_inf = as.numeric(scenarios[i, 6]))
+  sc_res[[2]]$scenario <- i
+  assign(paste0("sc_", i), c("Scenario" = i, summarise_scenario(sc_res)))
+}
+d <- cbind(scenarios[, c(5, 6)],
+  do.call(rbind.data.frame, lapply(paste0("sc_", 1:nrow(scenarios)), get))[, c(2, 3)])
+colnames(d)[3:4] <- c("P_1", "P_0")
+td <- spread(d %>% select(1, 2, 3), `$\\underbar c$`, P_1)
+colnames(td)[1] <- "$\\bar c\\backslash \\underbar c$"
+td %>% 
+  kable(escape = F, booktabs = T, align = "r", caption = "True rate = 0.05") %>% 
+  kable_styling(latex_options = "hold_position")
 ```

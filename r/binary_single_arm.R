@@ -25,6 +25,25 @@ hdiBeta <- function(p = 0.95, a, b) {
 }
 
 
+fixed_trial <- function(
+  ptru   = 0.08,
+  p0     = 0.05,
+  d      = 0.03,
+  nmax   = 500,
+  k_non  = 0.975,
+  k_inf  = 0.025,
+  a      = 1,
+  b      = 1
+) {
+  n <- 0:nmax
+  i_non <- which(pbeta(p0 + d, a + n, b + nmax - n) >= k_non) - 1
+  i_inf <- which(pbeta(p0 + d, a + n, b + nmax - n) <= k_inf) - 1
+  p_non <- sum(dbinom(i_non, nmax, ptru))
+  p_inf <- sum(dbinom(i_inf, nmax, ptru))
+  return(c(p_non, p_inf))
+}
+
+
 # Simulate Bayesian single-arm non-inferiority trial
 # with early termination for inferiority/non-inferiority
 # Model:
@@ -58,7 +77,8 @@ sim_trial <- function(
   n_analyses <- length(nint)
 
   # Generate data
-  y <- cumsum(rbinom(length(nint), diff(c(0, nint)), ptru))
+  x <- rbinom(length(nint), diff(c(0, nint)), ptru)
+  y <- cumsum(x)
   
   # Simulate interim analyses
   sim_interim <- function(interim) {
@@ -69,7 +89,7 @@ sim_trial <- function(
     bpost <- b + ncurr - ycurr
     # Posterior probability of H_1
     ptail <- pbeta(p0 + d, apost, bpost)
-    return(list(n = ncurr, y = ycurr, a = apost, b = bpost, ptail = ptail))
+    return(list(n = ncurr, x = x[interim], y = ycurr, a = apost, b = bpost, ptail = ptail))
   }
   # Iterate through all the interims
   intr <- lapply(1:n_analyses, sim_interim)
@@ -109,34 +129,37 @@ trial_decision <- function(sim_trial, k_non = 0.975, k_inf = 0.025) {
   if(length(k_inf) == 1) k_inf <- rep(k_inf, n_analyses)
   
   ptail <- sim_trial$ptail
+  sim_id <- sim_trial$sim_id[1]
   
   for(stage in 1:n_analyses) {
+    n <- sim_trial[stage, "n"]
     est <- sim_trial[stage, "a"] / (sim_trial[stage, "a"] + sim_trial[stage, "b"])
     if(stage < n_analyses) {
       # Check non-inferiority
       if(ptail[stage] > k_non[stage]) {
-        return(list(action = "stop", decision = "non-inferior", stage = stage, est = est))
+        return(list(sim_id = sim_id, action = "stop", decision = "non-inferior", stage = stage, n = n, est = est, ptail = ptail[stage]))
       }
       # Check inferiority
       if(ptail[stage] < k_inf[stage]) {
-        return(list(action = "stop", decision = "inferior", stage = stage, est = est))
+        return(list(sim_id = sim_id, action = "stop", decision = "inferior", stage = stage, n = n, est = est, ptail = ptail[stage]))
       } 
     } else {
       # Check non-inferiority
       if(ptail[stage] > k_non[stage]) {
-        return(list(action = "none", decision = "non-inferior", stage = stage, est = est))
+        return(list(sim_id = sim_id, action = "none", decision = "non-inferior", stage = stage, n = n, est = est, ptail = ptail[stage]))
       }
       # Check inferiority
       if(ptail[stage] <  k_inf[stage]) {
-        return(list(action = "none", decision = "inferior", stage = stage, est = est))
+        return(list(sim_id = sim_id, action = "none", decision = "inferior", stage = stage, n = n, est = est, ptail = ptail[stage]))
       }
-      return(list(action = "none", decision = "inconclusive", stage = stage, est = est))
+      return(list(sim_id = sim_id, action = "none", decision = "inconclusive", stage = stage, n = n, est = est, ptail = ptail[stage]))
     }
   }
 }
 
 trial_decision_pp <- function(sim_trial, k_non = 0.975, k_inf = 0.025, k_fut = 0.01, k_suc = 0.99) {
   n_analyses <- nrow(sim_trial)
+  sim_id <- sim_trial$sim_id[1]
   ptail <- sim_trial$ptail
   p0 <- sim_trial$p0
   d <- sim_trial$d
@@ -152,26 +175,42 @@ trial_decision_pp <- function(sim_trial, k_non = 0.975, k_inf = 0.025, k_fut = 0
       y_suc <- which(pbeta(p0 + d, a[stage] + 0:n_rem, b[stage] + n_rem - 0:n_rem) > k_non) - 1
       ppos <- sum(dbetabinom(y_suc, n_rem, a[stage], b[stage]))
       if(ppos < k_fut) {
-        return(list(action = "stop", decision = "futile", stage = stage, est = est))
+        return(list(sim_id = sim_id, action = "stop", decision = "futile", stage = stage, n = n[stage], est = est, ptail = ptail[stage], ppos = ppos))
       }
       if(ppos > k_suc) {
-        return(list(action = "stop", decision = "predict success", stage = stage, est = est))
+        return(list(sim_id = sim_id, action = "stop", decision = "predict success", stage = stage, n = n[stage], est = est, ptail = ptail[stage], ppos = ppos))
       }
     } else {
       # Check non-inferiority
       if(ptail[stage] > k_non) {
-        return(list(action = "none", decision = "non-inferior", stage = stage, est = est))
+        return(list(sim_id = sim_id, action = "none", decision = "non-inferior", stage = stage, n = n[stage], est = est, ptail = ptail[stage], ppos = NA))
       }
       # Check inferiority
       if(ptail[stage] <  k_inf) {
-        return(list(action = "none", decision = "inferior", stage = stage, est = est))
+        return(list(sim_id = sim_id, action = "none", decision = "inferior", stage = stage, n = n[stage], est = est, ptail = ptail[stage], ppos = NA))
       }
-      return(list(action = "none", decision = "inconclusive", stage = stage, est = est))
+      return(list(sim_id = sim_id, action = "none", decision = "inconclusive", stage = stage, n = n[stage], est = est, ptail = ptail[stage], ppos = NA))
     }
   }
 }
 
+decision_final <- function(sim_scenario, k_non = 0.975, k_inf = 0.025) {
+  df <- do.call(rbind.data.frame, lapply(sims, "[", 9, ))
+  df$final_decision <- ifelse(df$ptail > k_non, "non-inferior",
+                        ifelse(df$ptail < k_inf, "inferior", "inconclusive"))
+  return(df[, c("sim_id", "ptail", "final_decision")])
+}
+
+
+
 ### TESTING ###
+
+
+# sims <- sim_scenario(1e4, ptru = 0.05)
+# dec1 <- do.call(rbind.data.frame, lapply(sims, trial_decision))
+# dec2 <- do.call(rbind.data.frame, lapply(sims, trial_decision_pp))
+# dec3 <- decision_final(sims)
+# dec <- left_join(left_join(dec1, dec2, by = "sim_id"), dec3, by = "sim_id")
 
 # library(dplyr)
 # 

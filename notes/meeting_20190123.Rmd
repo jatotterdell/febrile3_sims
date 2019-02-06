@@ -1,0 +1,22 @@
+---
+title: "Meeting Notes - 2019-01-23"
+author: "James Totterdell"
+date: "23 January 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Meeting Notes
+
+* We do not want to stop for safety, only if the policy is unsafe. Therefore we can remove any stopping rules related to safety and just aim for the maximum affordable sample size in that case.
+
+* There are concerns that maybe the effect could "ramp up" in the sense that initially infants are still discharged after 48 hours rather than after 24 hours until everyone is on board with the change. Do we need to deal with this? Dynamic model?
+
+* The restriction to "low-risk" infants will not apply. The change in policy will be applied to every infant with a negative culture unless the treating physician is against the early discharge. This should be a better comparator for the historical baseline rate which could not discrimnate by risk.
+
+* There may be interest in sub group anaylses. In particlar, stratified by risk, and stratified by site. Maybe investigate the precision with which such effects could be estimated.
+
+* Look at conducting an analysis every time an event occurs. This would not violate any principles in a Bayesian analysis, but may bias results. E.g. always the highest possible estimate at that time point.

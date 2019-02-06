@@ -1,0 +1,649 @@
+---
+title: "FeBRILe3 - Simulations"
+subtitle: "Fever, Blood cultures and Readiness for discharge in Infants Less than 3 months old"
+author: "Prepared by: James Totterdell"
+date: "`r Sys.Date()`"
+output: 
+  bookdown::pdf_document2:
+    fig_caption: yes
+new_session: true
+delete_merged_file: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE,
+	fig.pos = "H",
+	fig.height = 3,
+	fig.width = 6,
+	fig.align = 'center'
+)
+options(stringsAsFactors = FALSE)
+
+knitr::opts_knit$set(root.dir = '..')
+```
+
+
+```{r pkgs, include=FALSE, eval=TRUE}
+library(tidyverse)
+library(purrr)
+library(magrittr)
+library(knitr)
+library(kableExtra)
+library(doParallel)
+library(latex2exp)
+library(gridExtra)
+library(data.table)
+library(ggridges)
+
+ggplot2::theme_set(
+  ggplot2::theme_bw(base_size = 9) + 
+    ggplot2::theme(axis.title = ggplot2::element_text(size = ggplot2::rel(0.9))) +
+    ggplot2::theme(axis.text = ggplot2::element_text(size = ggplot2::rel(0.7))) +
+    ggplot2::theme(panel.grid.minor = ggplot2::element_blank()) +
+    ggplot2::theme(plot.background = ggplot2::element_rect(fill = "transparent")))
+```
+
+
+```{r}
+source("r/binary_single_arm.R")
+```
+
+# Background and Rationale
+
+Distinguishing between benign, self-limiting viral infections and serious bacterial infections in young infants <3 months old with fever is a daily challenge for paediatricians worldwide. As a result, these infants undergo invasive investigations (including blood, urine and spinal fluid samples) to look for bacterial infection and stay in hospital for at least 48 hours on intravenous antibiotics until bacterial infection has been excluded. However, recent international studies support change to this practice by demonstrating that nearly all infants with bacteria in their blood will have a positive blood culture test by 24 hours and it is not necessary to wait 48 hours to show the test is negative.
+
+# Research Question
+
+We hypothesise that the implementation of evidence-based criteria for the safe early discharge of infants aged < 3 months old with FWS is associated with a rate of unplanned reattendance to hospital within 7 days of discharge which is non-inferior to that observed under current practice. Our secondary research questions will address gaps in local evidence regarding infections in these infants, to enable safe implementation of further guideline changes reflecting evidence-based, best-practice care. This could include, for example, deferment of lumbar puncture and/or outpatient management of very low risk infants.
+
+
+# Primary Outcome
+
+Our primary hypothesis is that the implementation of evidence-based criteria for the safe early discharge of infants aged less than 3 months old with fever without source  is associated with a rate of unplanned re-attendance to hospital within 7 days of discharge which is non-inferior to that observed under current practice.
+
+The primary outcome is the proportion of low-risk infants discharged before the current standard of 48 hours who re-presented or who were re-admitted to hospital due to a clinical deterioration/care-giver concern within 7 days of discharge.
+
+The primary study end-point is 7-day readmission to hospital.
+
+# Study Design
+
+Febrile3 is a pragmatic, multi-site, study of the safety of a change in Perth Children's Hospital (PCH) and Fiona Stanley Hospital (FSH) policy allowing infants with fever without source (FWS) who fulfil evidence-based criteria for being at low risk for severe bacterial infection (SBI) to be discharged as early as 24 hours from hospital.
+
+
+# Sample Size and Accrual {#accrual}
+
+The trial may run for up to two years with an expected maximum sample size of 500 individuals enrolled over the course of the study. We've therefore assumed accrual of about 5 individuals per week to achieve 500 individuals over the two year period.
+
+\clearpage
+
+# Statistical Analysis
+
+## Model
+
+Assume that the historical baseline rate is $\theta_0$, and we wish to assess the re-admission rate under the new policy, denoted $\theta$. We declare the new rate acceptable if it is within some clinically determined tolerance $\tau$ of the historical rate. Statistically, we aim to assess the following hypotheses:
+$$
+\begin{aligned}
+&H_0:\theta \geq \theta_0 + \tau\quad\text{(unsafe/inferior)} \\
+&H_1:\theta < \theta_0 + \tau\quad\text{(safe/non-inferior)}
+\end{aligned}
+$$
+and make a decision on the safety of the policy change.
+
+In the analysis we assume $\theta_0 + \tau$, the tolerable re-admission rate, is fixed based on historical data for the re-admission rate and clinician input.
+
+Assuming that the response rate does not drift over the course of the trial, the new re-admission rate following the change in policy, and the number of re-admissions observed throughout the study, will be modeled by a Beta-Binomial model. We pre-specify interim analyses at stages $k=1,...,K-1$ and the final analysis at stage $K$ and define:
+$$
+\begin{aligned}
+n_k &= \text{the number of enrolees since stage } k-1, \\
+x_k &= \text{the number of re-admissions since stage }k-1, \\
+N_k = \sum_{i=1}^k n_i &= \text{the total sample size at stage } k, \\
+y_k = \sum_{i=1}^k x_i &= \text{the total number of re-admissions by stage } k.
+\end{aligned}
+$$
+
+The complete model is:
+$$
+\begin{aligned}
+\pi_0(\theta) &= \text{Beta}(\theta|\alpha,\beta) \\
+f_k(y_k|\theta) &= \text{Binomial}(N_k, \theta) \\
+\pi_k(\theta|y_k) &= \text{Beta}(\theta|\alpha + y_k, \beta + N_k - y_k) \\
+P_k &= \mathbb P_{\Theta|Y_k}(\theta < \theta_0 + \tau|y_k) \\ 
+&= \int_0^{\theta_0+\tau} \pi_k(\theta|y_k) d\theta.
+\end{aligned}
+$$
+where $\pi_0$ is the prior distribution over the re-admission rate, $\pi_k$ is the posterior distribution at analysis $k$, and $P_k$ is the posterior probability that the new rate is within the specified tolerance of the historical rate given the data available at stage $k$.
+
+At the final analysis, a terminal decision is made regarding the safety level of the re-admission rate. This decision rule declares the re-admission rate safe, unsafe, or declares the information inconclusive:
+$$
+\delta_K(y_K) = \begin{cases}
+a_0 \text{ if }P_K \leq \underline c_K &\implies (\text{accept } H_0\text{, declare unsafe}), \\
+a_1 \text{ if }P_K \geq \overline c_K &\implies (\text{accept } H_1\text{, declare safe}), \\
+a_2 \text{ otherwise} &\implies (\text{inconclusive}).
+\end{cases}
+$$
+
+At each interim analysis a decision is made regarding the safety level of the re-admission rate. If the rate is found to exceed the tolerance level the trial will be stopped early and the re-admission rate declared in exceedance of the tolerable level. The interim decision rule is:
+$$
+\delta_k(y_k) = \begin{cases} 
+a_0 \text{ if }P_k \leq \underline c_k &\implies (\text{accept } H_0\text{, declare unsafe}), \\
+a_3 \text{ if }\overline c_k < P_k&\implies (\text{proceed to stage } k+1)
+\end{cases},\quad k=1,...,K-1.
+$$
+
+The trial is stopped at stage $k<K$ only if $\delta_k(y_k) = a_0$.
+
+## Trial Parameters
+
+The trial configuration parameters to be pre-specified are the historical rate, $\theta_0$, the tolerance $\tau$, the number and timing $k=1,...,K$ of the analyses, and the posterior probability cut-offs $\{\underline c_k\}_{k=1}^K$ deemed as evidence of unsafety and the terminal decision probability cut-off $\overline c_K$ determining safety. 
+
+The historical 7-day readmission rate for fever without source non serious bacterial infection was estimated as 0.05. Therefore, we will specify a fixed historical rate of $\theta_0 = 0.05$ to be used in the trial. A tolerance of $\tau = 0.03$ was decided by clinician input.
+
+Due to the rarity of the outcome, we specify no analyses until data is available on 100 individuals. Analyses will then occur every 50 individuals with follow-up. Thus, $\{N_k\}_{k=1}^K = \{100,150,...,450,500\}$ with $K = 9$. Under the assumed accrual in [Section 5](#accrual) this might correspond to an analysis about every ten weeks.
+
+We specify a non-informative prior with $\alpha = 1$ and $\beta = 1$.
+
+Given a pre-specified sequence of sample sizes at which analyses are to occur, we can analytically determine the number of responses required to make a decision of unsafety for a given probability cut-off at each stage. For example, assuming a first analysis at 100 individuals with follow-up and further analyses at every 50 additional individuals, the relevant re-admission criteria are given in Table \@ref(tab:unnamed-chunk-2). If, using the pre-specified bounds, this number of re-admissions or more was observed at the interim then the decision would be to stop for unsafety.
+
+**Based on simulation results, Table \@ref(tab:unnamed-chunk-2), and clinician input, the bounds which will be used in the study analyses are...**
+
+```{r}
+n_int <- seq(100, 500, 50)
+theta0 <- 0.05
+tau <- 0.03
+delta <- theta0 + tau
+
+k_inf <- seq(0.1, 0.01, -0.005)
+res_inf <- do.call(cbind, 
+lapply(n_int,
+       function(n) {
+        sapply(k_inf, function(x) {
+  tmp <- range(which(pbeta(delta, 1 + 0:n, 1 + n - 0:n) < x) - 1)
+  tmp[1]
+})}))
+colnames(res_inf) <- n_int
+rownames(res_inf) <- sprintf("%.3f", k_inf)
+
+kable(res_inf, booktabs = T, col.names = c(seq(100, 500, 50)), align = "c", 
+      caption = "Minimum number of re-admissions required to declare unsafe at interim using Beta(1,1) prior.") %>%
+  kable_styling(latex_options = "hold_position", font_size = 8) %>%
+  add_header_above(header = c(" " = 1, "Sample size at interim" = 9)) %>%
+  group_rows(group_label = "Unsafety bound", 1, 19) %>%
+  column_spec(2, border_left = T)
+```
+
+
+
+\clearpage
+
+# Simulations
+
+To get an estimate of how probable it is that we stop at each analysis and make a decision, we resort to Monte Carlo estimates Simulations are used to investigate appropriate trial parameters and to estimate the following quantities under repeated trials using these parameters for some true response rate $\theta^\star$:
+
+  * The probability of an correct and incorrect decision,
+  * The probability of stopping the trial early for inferiority,
+  * The expected sample size,
+  * The expected paramter estimate.
+
+We simulate 10,000 datasets under each scenario for the value of $\theta^\star \in \{0.05,0.06,...,0.10\}$ with the null scenario being $\theta^\star = \theta_0+\tau$. We investigated the Cartesian product
+$$
+(\underline c, \overline c) \in \{0.1,0.075,0.05,0.025,0.01\}\times\{0.9,0.925,0.95,0.975,0.99\}
+$$
+as options for fixed values of $(\underline c, \overline c)$.
+
+We investigated the effect of non-informative and enthusiastic priors for the new readmission rate (Figure \@ref(fig:priors)).
+
+```{r priors, fig.height = 2.5, fig.width = 4, fig.align='center', fig.cap="Priors considered."}
+ggplot(data.frame(x = c(0, 1)), aes(x)) +
+  stat_function(aes(linetype = 'Beta(1.0,1.0)'), fun = dbeta, args = list(shape1 = 1, shape2 = 1)) +
+  stat_function(aes(linetype = 'Beta(0.5,0.5)'), fun = dbeta, args = list(shape1 = 0.5, shape2 = 0.5)) +
+  stat_function(aes(linetype = 'Beta(1.5,17.5)'), fun = dbeta, args = list(shape1 = 1.5, shape2 = 17.5)) +
+  scale_linetype("") +
+  theme(legend.position = c(0.5, 0.5), legend.background = element_blank()) +
+  labs(x = expression(theta), y = expression(pi[0](theta)))
+```
+
+## Example Trials
+
+To show how the trial would proceed we first present a few examples. 
+
+Figure 1 shows the procession of two trials simulated under the true state of nature $\theta^\star = 0.07$ which is within the safety hypothesis set. At the final analysis of trial a), the decision to declare the re-admission rate to be at a safe level was made ($P_K \geq 0.95$). At the final analysis of trial b), a decision was made to declare the re-admission rate unsafe ($P_K \leq 0.05$). Given the assumed rate, this would be classified as a Type II error.
+
+```{r}
+set.seed(1234)
+nint <- seq(100, 500, 50)
+stages <- length(nint)
+sim <- sim_scenario(1000, nint = nint, ptru = 0.07)
+sim_dt <- rbindlist(sim)
+sim_stop <- sim_dt[stage < stages, 
+  .(stage = which.min(ifelse(ptail < 0.05, stage, NA)),
+    max_looks = stages - 1,
+    looks = sum(stage <= which.min(ifelse(ptail < 0.05, stage, NA)))), 
+  by = .(sim_id)][is.na(stage), stage := stages]
+
+sim_res <- sim_dt[sim_stop, on = .(sim_id, stage)][, 
+  `:=`(stopped = ifelse(stage == stages, 0, 1), 
+       decision = 3 - 2*(ptail < 0.05) - (ptail > 0.95),
+       est = a / (a + b))]
+
+sim_dt[, c("lo", "hi") := as.list(hdiBeta(0.95, a, b)), by = 1:nrow(sim_dt)]
+sim_res[, c("lo", "hi") := as.list(hdiBeta(0.95, a, b)), by = 1:nrow(sim_res)]
+```
+
+Figure 2 shows the procession of two trials simulated under the true state of nature $\theta^\star = 0.09$ which is within the null hypothesis set. At the final analysis of trial a), a decision to declare the re-admission rate to be at a safe level was made ($P_K \geq 0.95$). Given the assumed rate, this would be classfied as a Type I error. At an interim analysis of trial b) ($N_k = 350$), a decision was made to stop early and declare the re-admission rate unsafe ($P_K \leq 0.05$).
+
+```{r, fig.cap="Example procession of posterior distributions $\\pi_k(\\theta|y_k)$ for the re-admission rate in a trial which ends in a declaration at the final analysis of a) safety, and b) unsafety, where the true state of nature is $\\theta^\\star=0.07$."}
+id_safe <- min(sim_res[decision == 2, sim_id])
+Pk <- sprintf("%.2f", sim_res[sim_id == id_safe, ptail])
+plotdat <- sim_dt[sim_id == id_safe, lapply(seq(0, 0.15, 0.001), function(x) dbeta(x, a, b)), by = .(n, a, b)]
+plotdat <- melt(plotdat, id.vars = c("n", "a", "b"), variable.name = "theta", value.name = "p")
+plotdat[, theta := rep(seq(0, 0.15, 0.001), each = 9)]
+plotdat[, q := qbeta(0.05, a, b)]
+plotdat[, cp := ifelse(theta < 0.08, 1, 0)]
+gg1 <- ggplot(plotdat,
+       aes(x = theta, y = n, height = p, group = n, fill = factor(cp))) +
+  geom_density_ridges_gradient(stat = "identity", rel_min_height = 0.01, scale = 2) +
+  geom_vline(xintercept = 0.07, linetype = 2) +
+  geom_vline(xintercept = 0.08, linetype = 1) +
+  annotate("text", x = 0.02, y = 600, label = 'Declare safe', parse = F, size = 2) +
+  annotate("text", x = 0.02, y = 575, label = deparse(bquote(P[K] ~ "=" ~ .(Pk))), parse = T, size = 2) +
+  scale_fill_manual(values = c("white", "grey60"), name = NULL,
+                  labels = c(expression(theta>theta[0]+tau), expression(theta<theta[0]+tau))) +
+  scale_y_continuous("Sample size", breaks = seq(100, 500, 50)) +
+  scale_x_continuous(expression(theta), breaks = c(0, 0.05, 0.07, 0.08, 0.1, 0.15, 0.2)) +
+  theme(legend.position = c(0.8, 0.85), legend.text.align = 0, panel.grid.major.x = element_blank(),
+        legend.background = element_blank()) +
+  labs(subtitle = "a)")
+
+id_unsafe <- min(sim_res[decision == 1 & stage == 9, sim_id])
+Pk <- sprintf("%.2f", sim_res[sim_id == id_unsafe, ptail])
+plotdat <- sim_dt[sim_id == id_unsafe, lapply(seq(0, 0.15, 0.001), function(x) dbeta(x, a, b)), by = .(n, a, b)]
+plotdat <- melt(plotdat, id.vars = c("n", "a", "b"), variable.name = "theta", value.name = "p")
+plotdat[, theta := rep(seq(0, 0.15, 0.001), each = 9)]
+plotdat[, q := qbeta(0.05, a, b)]
+plotdat[, cp := ifelse(theta < 0.08, 1, 0)]
+gg2 <- ggplot(plotdat,
+       aes(x = theta, y = n, height = p, group = n, fill = factor(cp))) +
+  geom_density_ridges_gradient(stat = "identity", rel_min_height = 0.01, scale = 2) +
+  geom_vline(xintercept = 0.07, linetype = 2) +
+  geom_vline(xintercept = 0.08, linetype = 1) +
+  annotate("text", x = 0.02, y = 600, label = 'Declare unsafe', parse = F, size = 2) +
+  annotate("text", x = 0.02, y = 575, label = deparse(bquote(P[K] ~ "=" ~ .(Pk))), parse = T, size = 2) +
+  scale_fill_manual(values = c("white", "grey60"), name = "",
+                  labels = c(expression(theta>theta[0]+tau), expression(theta<theta[0]+tau))) +
+  scale_linetype_manual("", values = c(1, 2)) +
+  scale_y_continuous("Sample size", breaks = seq(100, 500, 50)) +
+  scale_x_continuous(expression(theta), breaks = c(0, 0.05, 0.07, 0.08, 0.1, 0.15, 0.2)) +
+  theme(legend.position = "none", panel.grid.major.x = element_blank(),
+        axis.text.y = element_blank(), axis.title.y = element_blank()) +
+  labs(subtitle = "b)")
+
+grid.arrange(cbind(ggplotGrob(gg1), ggplotGrob(gg2), size = "first"))
+```
+
+
+
+```{r}
+set.seed(1234)
+nint <- seq(100, 500, 50)
+stages <- length(nint)
+sim <- sim_scenario(1000, nint = nint, ptru = 0.09)
+sim_dt <- rbindlist(sim)
+sim_stop <- sim_dt[stage < stages, 
+  .(stage = which.min(ifelse(ptail < 0.05, stage, NA)),
+    max_looks = stages - 1,
+    looks = sum(stage <= which.min(ifelse(ptail < 0.05, stage, NA)))), 
+  by = .(sim_id)][is.na(stage), stage := stages]
+
+sim_res <- sim_dt[sim_stop, on = .(sim_id, stage)][, 
+  `:=`(stopped = ifelse(stage == stages, 0, 1), 
+       decision = 3 - 2*(ptail < 0.05) - (ptail > 0.95),
+       est = a / (a + b))]
+
+sim_dt[, c("lo", "hi") := as.list(hdiBeta(0.95, a, b)), by = 1:nrow(sim_dt)]
+sim_res[, c("lo", "hi") := as.list(hdiBeta(0.95, a, b)), by = 1:nrow(sim_res)]
+```
+
+
+```{r, fig.cap="Example procession of posterior distributions $\\pi_k(\\theta|y_k)$ for the re-admission rate in trial which ends in a) declaration at the final analysis of safety, and b) early stopping for unsafety, where the true state of nature is $\\theta^\\star=0.09$. Red lines indicate unobserved analyses due to early stopping."}
+id_safe <- min(sim_res[decision == 2, sim_id])
+Pk <- sprintf("%.2f", sim_res[sim_id == id_safe, ptail])
+plotdat <- sim_dt[sim_id == id_safe, lapply(seq(0, 0.15, 0.001), function(x) dbeta(x, a, b)), by = .(n, a, b)]
+plotdat <- melt(plotdat, id.vars = c("n", "a", "b"), variable.name = "theta", value.name = "p")
+plotdat[, theta := rep(seq(0, 0.15, 0.001), each = 9)]
+plotdat[, q := qbeta(0.05, a, b)]
+plotdat[, cp := ifelse(theta < 0.08, 1, 0)]
+gg1 <- ggplot(plotdat,
+       aes(x = theta, y = n, height = p, group = n, fill = factor(cp))) +
+  geom_density_ridges_gradient(stat = "identity", rel_min_height = 0.01, scale = 2) +
+  geom_vline(xintercept = 0.09, linetype = 2) +
+  geom_vline(xintercept = 0.08, linetype = 1) +
+  annotate("text", x = 0.02, y = 600, label = 'Declare safe', parse = F, size = 2) +
+  annotate("text", x = 0.02, y = 575, label = deparse(bquote(P[K] ~ "=" ~ .(Pk))), parse = T, size = 2) +
+  scale_fill_manual(values = c("white", "grey60"), name = NULL,
+                  labels = c(expression(theta>theta[0]+tau), expression(theta<theta[0]+tau))) +
+  scale_y_continuous("Sample size", breaks = seq(100, 500, 50)) +
+  scale_x_continuous(expression(theta), breaks = c(0, 0.05, 0.08, 0.09, 0.1, 0.15, 0.2)) +
+  theme(legend.position = c(0.8, 0.85), legend.text.align = 0, panel.grid.major.x = element_blank(),
+        legend.background = element_blank()) +
+  labs(subtitle = "a)")
+
+id_unsafe <- min(sim_res[decision == 1 & stage > 2, sim_id])
+Pk <- sprintf("%.2f", sim_res[sim_id == id_unsafe, ptail])
+plotdat <- sim_dt[sim_id == id_unsafe, lapply(seq(0, 0.15, 0.001), function(x) dbeta(x, a, b)), by = .(n, a, b)]
+plotdat <- melt(plotdat, id.vars = c("n", "a", "b"), variable.name = "theta", value.name = "p")
+plotdat[, theta := rep(seq(0, 0.15, 0.001), each = 9)]
+plotdat[, q := qbeta(0.05, a, b)]
+plotdat[, cp := ifelse(theta < 0.08, 1, 0)]
+plotdat[, after_stop := ifelse(n > sim_res[sim_id == id_unsafe, n], 1, 0)]
+gg2 <- ggplot(plotdat,
+       aes(x = theta, y = n, height = p, group = n, fill = factor(cp), colour = factor(after_stop))) +
+  geom_density_ridges_gradient(stat = "identity", rel_min_height = 0.01, scale = 2) +
+  geom_vline(xintercept = 0.09, linetype = 2) +
+  geom_vline(xintercept = 0.08, linetype = 1) +
+  annotate("text", x = 0.02, y = 362.5, label = 'Declare unsafe', size = 2, vjust = 0) +
+  annotate("text", x = 0.02, y = 337.5, label = deparse(bquote(P[k~"="~6] ~ "=" ~ .(Pk))), 
+           parse = T, size = 2) +
+  scale_fill_manual(values = c("white", "grey60"), name = "",
+                  labels = c(expression(theta>theta[0]+tau), expression(theta<theta[0]+tau))) +
+  scale_colour_manual(NULL, values = c("1" = "red", "0" = "black")) +
+  scale_linetype_manual("", values = c(1, 2)) +
+  scale_y_continuous("Sample size", breaks = seq(100, 500, 50), limits = c(100, 625)) +
+  scale_x_continuous(expression(theta), breaks = c(0, 0.05, 0.08, 0.09, 0.1, 0.15, 0.2)) +
+  theme(legend.position = "none", panel.grid.major.x = element_blank(),
+        axis.text.y = element_blank(), axis.title.y = element_blank()) +
+  labs(subtitle = "b)")
+
+grid.arrange(cbind(ggplotGrob(gg1), ggplotGrob(gg2), size = "first"))
+```
+
+
+```{r, eval = FALSE}
+sim <- sim_scenario(10000, nint = 1:500, ptru = 0.07)
+sim_dt <- rbindlist(sim)
+sim_stop <- sim_dt[stage < 500, 
+  .(stage = which.min(ifelse(stage >= 100 & ptail < 0.05, stage, NA)),
+    max_looks = sum(stage >= 100),
+    looks = sum(stage >= 100 & stage <= which.min(ifelse(stage >= 100 & ptail < 0.05, stage, NA)))), 
+  by = .(sim_id)][looks == 0, looks := max_looks][is.na(stage), stage := 500]
+sim_stop_event <- sim_dt[stage < 500, 
+  .(stage = which.min(ifelse(stage >= 100 & x == 1 & ptail < 0.05, stage, NA)),
+    max_looks = sum(stage >= 100 & x == 1),
+    looks = sum(stage >= 100 & x == 1 & 
+                stage <= which.min(ifelse(stage >= 100 & x == 1 & ptail < 0.05, stage, NA)))), 
+  by = .(sim_id)][looks == 0, looks := max_looks][is.na(stage), stage := 500]
+sim_stop_fifty <- sim_dt[stage < 500, 
+  .(stage = which.min(ifelse(stage >= 100 & stage %% 50 == 0 & ptail < 0.05, stage, NA)),
+    max_looks = sum(stage >= 100 & stage %% 50 == 0),
+    looks = sum(stage >= 100 & stage %% 50 == 0 & 
+                stage <= which.min(ifelse(stage >= 100 & stage %% 50 == 0 & ptail < 0.05, stage, NA)))), 
+  by = .(sim_id)][looks == 0, looks := max_looks][is.na(stage), stage := 500]
+sim_stop_final <- sim_dt[stage == 500]
+
+
+
+sim_res <- sim_dt[sim_stop, on = .(sim_id, stage)][, 
+  `:=`(stopped = ifelse(stage == 500, 0, 1), 
+       decision = 3 - 2*(ptail < 0.05) - (ptail > 0.975),
+       est = a / (a + b))]
+sim_res_event <- sim_dt[sim_stop_event, on = .(sim_id, stage)][, 
+  `:=`(stopped = ifelse(stage == 500, 0, 1), 
+       decision = 3 - 2*(ptail < 0.05) - (ptail > 0.975),
+       est = a / (a + b))]
+sim_res_fifty <- sim_dt[sim_stop_fifty, on = .(sim_id, stage)][, 
+  `:=`(stopped = ifelse(stage == 500, 0, 1), 
+       decision = 3 - 2*(ptail < 0.05) - (ptail > 0.975),
+       est = a / (a + b))]
+sim_res_final <- sim_dt[sim_stop_final, on = .(sim_id, stage)][, 
+  `:=`(stopped = 0, 
+       decision = 3 - 2*(ptail < 0.05) - (ptail > 0.975),
+       est = a / (a + b))]
+
+sim_res[, table(decision, stopped)]
+sim_res_event[, table(decision, stopped)]
+sim_res_fifty[, table(decision, stopped)]
+sim_res_final[, table(decision, stopped)]
+
+sim_res[, .(.N, mean(est)), by = .(stopped)]
+sim_res_event[, .(.N, mean(est)), by = .(stopped)]
+sim_res_fifty[, .(.N, mean(est)), by = .(stopped)]
+sim_res_final[, .(.N, mean(est)), by = .(stopped)]
+
+sim_res[, .(.N, mean(est)), by = .(decision, stopped)]
+sim_res_event[, .(.N, mean(est)), by = .(decision, stopped)]
+sim_res_fifty[, .(.N, mean(est)), by = .(decision, stopped)]
+sim_res_final[, .(.N, mean(est)), by = .(decision, stopped)]
+```
+
+\clearpage
+
+## Operating Characteristics
+
+
+```{r, cache = TRUE, eval=FALSE}
+# Note that this is run separately to store the 
+# results and reduce compilation time of the 
+# R markdown document
+set.seed(94567)
+n_sims <- 1e4
+
+scenarios <- data.frame(
+  "scenario" = 1:18,
+  d = rep(tau, 18),
+  p0 = rep(theta0, 18),
+  ptru = rep(c(delta, 0.05, 0.06, 0.07, 0.09, 0.10), each = 3),
+  a0 = rep(c(1, 0.5, 1.5), 6),
+  b0 = rep(c(1, 0.5, 17.5), 6))
+
+bounds <- expand.grid(k_inf = c(0.1, 0.075, 0.05, 0.025, 0.01),
+                      k_non = c(0.9, 0.925, 0.95, 0.975, 0.99))
+
+apply_decision <- function(sc_res, k_inf, k_non) {
+  dec_res <- map_df(
+    lapply(1:length(sc_res), function(i) 
+    do.call(rbind.data.frame, lapply(1:n_sims, function(j) 
+      trial_decision(sc_res[[i]][[j]], k_inf = k_inf, k_non = c(rep(1.01, 8), k_non))))),
+      ~ as.data.frame(.x), .id = "scenario") %>%
+    mutate(k_inf = k_inf[1], k_non = k_non, scenario = as.numeric(scenario))
+  return(dec_res)
+}
+
+summarise_decision <- function(dec_res) {
+  dec_res %>% 
+  group_by(scenario, k_inf, k_non) %>% 
+  summarise(decl_inf = mean(decision == "inferior"),
+            decl_non = mean(decision == "non-inferior"),
+            stop_early = mean(action == "stop"),
+            avg_n = mean(n)) %>%
+  ungroup()
+}
+
+cl <- makeCluster(4)
+registerDoParallel(cl)
+
+sc_res <- lapply(1:nrow(scenarios),
+       function(i) sim_scenario(n_sims,
+                                d = scenarios[i, "d"],
+                                p0 = scenarios[i, "p0"],
+                                ptru = scenarios[i, "ptru"],
+                                a = scenarios[i, "a0"],
+                                b = scenarios[i, "b0"]))
+stopCluster(cl)
+saveRDS(sc_res, file = "out/simulation_data_prior.rds")
+
+dec_res <- lapply(1:nrow(bounds), function(i)
+  apply_decision(sc_res, bounds[i, 1], bounds[i, 2]))
+dec_res_df <- map_df(dec_res, ~ as.data.frame(.x), .id = "decision_rule") %>%
+  mutate(decision_rule = as.numeric(decision_rule))
+dec_res_df <- left_join(scenarios, dec_res_df)
+saveRDS(dec_res_df, file = "out/decision_data_prior.rds")
+
+lowck <- seq(0.01, 0.1, length.out = 9)
+lowck <- c(0.01, 0.015, 0.02, 0.035, 0.045, 0.055, 0.065, 0.08, 0.09)
+sapply(1:9, function(i) min(which(pbeta(0.08, 1 + 0:nint[i], nint[i] - 0:nint[i]) < lowck[i]) - 1))
+dec_res2 <- apply_decision(sc_res, lowck, 0.95)
+dec_res2 <- left_join(scenarios, dec_res2)
+saveRDS(dec_res2, file = "out/decision_data_prior_linear.rds")
+```
+
+
+```{r read_dat}
+n_sims <- 1e4
+dec_res_df <- readRDS("out/decision_data_prior.rds")
+dec_res2 <- readRDS("out/decision_data_prior_linear.rds")
+```
+
+Table \@ref(tab:unnamed-chunk-9) shows how the decision probabilities vary with the prior parameters for fixed $(\underline c = 0.05, \overline c = 0.95)$. The Jeffrey's and enthusiastic prior had increased probability of correctly declaring safety, but also had a slightly elevated probability of incorrectly declaring safety and reduced probability of correctly declaring unsafety. The remaining results utilise $\alpha = 1$ and $\beta-1$ for the prior parameters.
+
+Table \@ref(tab:unnamed-chunk-10) shows how the operational characteristics vary with $\overline c$. At $\theta^\star = 0.05$ a bound of $\overline c = 0.95$ provides 83\% power and controls Type I error at less than 5\% for $\theta^\star = 0.08$.
+
+Table \@ref(tab:unnamed-chunk-11) shows how the operational characteristics vary with $\underline c$. At $\theta^\star = 0.05$ a bound of $\underline c = 0.05$ would incorrectly declare the re-admission rate unsafe with almost zero probability. At $\theta^\star = 0.08$ a bound of $\underline c = 0.05$ would correctly declare unsafety with probability about 0.16.
+
+Figure \@ref(fig:unnamed-chunk-12) shows the probability of declaring the re-admission rate unsafe at each stage of analysis for varying $\theta^\star$ and $\underline c$. The most probable stopping time when $\underline c$ is fixed across all analyses is at the first analysis where $N_1 = 100$.
+
+The stopping time may be extended by varying the evidence bounds across the interims, for example, requiring stricter evidence initially, but becoming less strict as the sample size increases. Table \@ref(tab:unnamed-chunk-13) and Figure \@ref(fig:unnamed-chunk-14) present results where the evidence bound increases linearly across the analyses according to $\underline c_k = 0.01 + 0.01125(k-1)$ which enforces $\underline c_1 = 0.01$ and $\underline c_K = 0.1$. This decreases the probability of stopping at the first interim and results similar better control of decision probabilities for unsafety at the cost of stopping slightly later on average.
+
+```{r}
+dec_res_df %>% 
+  filter(k_inf == 0.05, k_non == 0.95, ptru %in% c(0.05, 0.06, 0.07, 0.08, 0.09, 0.10)) %>% 
+  group_by(k_inf, k_non, ptru, a0, b0) %>%
+  summarise(inf = mean(decision == "inferior"), 
+            non = mean(decision == "non-inferior"),
+            stop_early = mean(action == "stop"),
+            mean_sam = mean(n),
+            sd_sam = sd(n),
+            mean_est = mean(est),
+            std_est = sd(est)) %>%
+  arrange(ptru) %>%
+  kable(format = "latex", booktabs = T, escape = F, digits = c(3, 3, 3, 1,1, 2, 2, 2, 0, 0, 2, 2), 
+        linesep = c('', '', '\\addlinespace'),
+        caption = "Decision probabilities, stopping probability, and expected sample size when varying the prior parameters ($\\alpha, \\beta$).",
+        col.names = c("$\\underline c$", "$\\overline c$", "$\\theta^\\star$", 
+                      "$\\alpha$", "$\\beta$", 
+                      "$\\mathbb P[\\text{inferior}]$", 
+                      "$\\mathbb P[\\text{non-inferior}]$",
+                      "$\\mathbb P[\\text{stop early}]$",
+                      "$\\mathbb E[N]$", "$\\text{SD}[N]$",
+                      "$\\mathbb E[\\hat\\theta]$",
+                      "$\\text{SD}[\\hat \\theta]$")) %>%
+  kable_styling(latex_options = c("hold_position"), font_size = 8)
+```
+
+
+
+```{r}
+dec_res_df %>% 
+  filter(a0 == 1, b0 == 1, k_inf == 0.05, ptru %in% c(0.05, 0.06, 0.07, 0.08, 0.09, 0.10)) %>% 
+  group_by(ptru, k_inf, k_non) %>%
+  summarise(inf = mean(decision == "inferior"), 
+            non = mean(decision == "non-inferior"),
+            stop_early = mean(action == "stop"),
+            mean_sam = mean(n),
+            sd_sam = sd(n),
+            mean_est = mean(est),
+            std_est = sd(est)) %>%
+  arrange(ptru) %>%
+  kable(format = "latex", booktabs = T, escape = F, digits = c(3, 3, 3, 2, 2, 2, 0, 0, 2, 2), 
+        linesep = c(rep('', 4), '\\addlinespace'),
+        caption = "Decision probabilities, stopping probability, and expected sample size when varying $\\overline c$.",
+        col.names = c("$\\theta^\\star$", "$\\underline c$", "$\\overline c$", 
+                      "$\\mathbb P[\\text{inferior}]$", 
+                      "$\\mathbb P[\\text{non-inferior}]$",
+                      "$\\mathbb P[\\text{stop early}]$",
+                      "$\\mathbb E[N]$", "$\\text{SD}[N]$",
+                      "$\\mathbb E[\\hat\\theta]$",
+                      "$\\text{SD}[\\hat \\theta]$")) %>%
+  kable_styling(latex_options = c("hold_position"), font_size = 8)
+```
+
+
+
+```{r}
+dec_res_df %>% 
+  filter(a0 == 1, b0 == 1, k_non == 0.95, ptru %in% c(0.05, 0.06, 0.07, 0.08, 0.09, 0.10)) %>% 
+  group_by(ptru, k_inf, k_non) %>%
+  summarise(inf = mean(decision == "inferior"), 
+            non = mean(decision == "non-inferior"),
+            stop_early = mean(action == "stop"),
+            mean_sam = mean(n),
+            sd_sam = sd(n),
+            mean_est = mean(est),
+            std_est = sd(est)) %>%
+  arrange(ptru) %>%
+  kable(format = "latex", booktabs = T, escape = F, digits = c(3, 3, 3, 2, 2, 2, 0, 0, 2, 2), 
+        linesep = c(rep('', 4), '\\addlinespace'),
+        caption = "Decision probabilities, stopping probability, and expected sample size when varying $\\underline c$.",
+        col.names = c("$\\theta^\\star$", "$\\underline c$", "$\\overline c$", 
+                      "$\\mathbb P[\\text{inferior}]$", 
+                      "$\\mathbb P[\\text{non-inferior}]$",
+                      "$\\mathbb P[\\text{stop early}]$",
+                      "$\\mathbb E[N]$", "$\\text{SD}[N]$",
+                      "$\\mathbb E[\\hat\\theta]$",
+                      "$\\text{SD}[\\hat \\theta]$")) %>%
+  kable_styling(latex_options = c("hold_position"), font_size = 8)
+```
+
+\clearpage
+
+
+```{r, fig.width = 6, fig.height = 4, fig.cap = "Marginal probability of declaring unsafe at each stage under each true rate and fixed evidence bound."}
+dec_res_df %>% 
+  filter(k_non == 0.95, ptru %in% c(0.05, 0.06, 0.07, 0.073, 0.09, 0.10), 
+         a0 == 1, b0 == 1, decision == "inferior") %>% 
+  group_by(ptru, k_inf)  %>%
+  count(decision, n) %>%
+  ungroup() %>%
+  mutate(lab = paste0("True rate = ", ptru)) %>%
+  filter(decision != "inconclusive") %>%
+  ggplot(aes(n, nn / n_sims)) +
+  facet_grid(k_inf ~ ptru, labeller = label_bquote(cols = theta^"*" * " = " * .(ptru),
+                                                   rows = underline(c) * " = " * .(k_inf))) + 
+  geom_bar(stat = "identity") +
+  labs(y = "Probability declare unsafe at anlaysis", x = "Sample size")
+```
+
+
+\clearpage
+
+```{r}
+dec_res2 %>% 
+  filter(a0 == 1, b0 == 1, ptru %in% c(0.05, 0.06, 0.07, 0.08, 0.09, 0.10)) %>% 
+  group_by(ptru, k_non) %>%
+  summarise(inf = mean(decision == "inferior"), 
+            non = mean(decision == "non-inferior"),
+            stop_early = mean(action == "stop"),
+            mean_sam = mean(n),
+            sd_sam = sd(n),
+            mean_est = mean(est),
+            std_est = sd(est)) %>%
+  arrange(ptru) %>%
+  kable(format = "latex", booktabs = T, escape = F, digits = c(2, 2, 2, 2, 2, 0, 0, 2, 2), 
+        linesep = c(rep('', 5)),
+        caption = "Decision probabilities, stopping probability, and expected sample size for $\\underline c_k = 0.01 + 0.01125(k-1)$.",
+        col.names = c("$\\theta^\\star$", "$\\overline c$", 
+                      "$\\mathbb P[\\text{inferior}]$", 
+                      "$\\mathbb P[\\text{non-inferior}]$",
+                      "$\\mathbb P[\\text{stop early}]$",
+                      "$\\mathbb E[N]$", "$\\text{SD}[N]$",
+                      "$\\mathbb E[\\hat\\theta]$",
+                      "$\\text{SD}[\\hat \\theta]$")) %>%
+  kable_styling(latex_options = c("hold_position"), font_size = 8)
+```
+
+
+```{r, fig.width = 6, fig.height = 2.5, fig.cap = "Marginal probability of declaring unsafe at each stage under each true rate with linearly increasing lower bound $\\underline c_k = 0.01 + 0.01125(k-1)$."}
+dec_res2 %>% 
+  filter(k_non == 0.95, ptru %in% c(0.05, 0.06, 0.07, 0.08, 0.09, 0.10), 
+         a0 == 1, b0 == 1, decision == "inferior") %>% 
+  group_by(ptru, k_inf)  %>%
+  count(decision, n) %>%
+  ungroup() %>%
+  mutate(lab = paste0("True rate = ", ptru)) %>%
+  filter(decision != "inconclusive") %>%
+  ggplot(aes(n, nn / n_sims)) +
+  facet_grid(. ~ ptru, labeller = label_bquote(cols = theta^"*" * " = " * .(ptru))) + 
+  geom_bar(stat = "identity") +
+  labs(y = "Probability declare unsafe at anlaysis", x = "Sample size")
+```

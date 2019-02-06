@@ -1,0 +1,9 @@
+Need to run some simulations for a one-arm trial with rate/proportion response (re-admission to hospital).
+
+Assume a baseline rate of around 4% - 6% and allow margin of tolerance of about 3%.
+
+So, say non-inferior, if posterior probability of 97.5% that outcome rate r is less than 7% - 9%, for example.
+
+Run various scenarios for assumed baseline rate, rate under policy change, and allowable margin of tolerance.
+
+Need something well before 22nd January

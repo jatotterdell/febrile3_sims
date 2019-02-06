@@ -1,0 +1,475 @@
+---
+title: "FeBRILe3 - Simulations"
+subtitle: "Fever, Blood cultures and Readiness for discharge in Infants Less than 3 months old"
+author: "Prepared by: James Totterdell"
+date: "`r Sys.Date()`"
+output: 
+  bookdown::pdf_document2:
+    fig_caption: yes
+new_session: true
+delete_merged_file: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE,
+	fig.pos = "H",
+	fig.height = 3,
+	fig.width = 5,
+	fig.align = 'center'
+)
+options(stringsAsFactors = FALSE)
+
+knitr::opts_knit$set(root.dir = '..')
+```
+
+
+```{r pkgs, include=FALSE, eval=TRUE}
+library(tidyverse)
+library(purrr)
+library(magrittr)
+library(knitr)
+library(kableExtra)
+library(doParallel)
+library(latex2exp)
+library(gridExtra)
+
+ggplot2::theme_set(
+  ggplot2::theme_bw(base_size = 9) + 
+    ggplot2::theme(axis.title = ggplot2::element_text(size = ggplot2::rel(0.9))) +
+    ggplot2::theme(axis.text = ggplot2::element_text(size = ggplot2::rel(0.7))) +
+    ggplot2::theme(panel.grid.minor = ggplot2::element_blank()) +
+    ggplot2::theme(plot.background = ggplot2::element_rect(fill = "transparent")))
+```
+
+
+```{r}
+source("r/binary_single_arm.R")
+```
+
+# Background and Rationale
+
+Distinguishing between benign, self-limiting viral infections and serious bacterial infections in young infants <3 months old with fever is a daily challenge for paediatricians worldwide. As a result, these infants undergo invasive investigations (including blood, urine and spinal fluid samples) to look for bacterial infection and stay in hospital for at least 48 hours on intravenous antibiotics until bacterial infection has been excluded. However, recent international studies support change to this practice by demonstrating that nearly all infants with bacteria in their blood will have a positive blood culture test by 24 hours and it is not necessary to wait 48 hours to show the test is negative.
+
+# Research Question
+
+We hypothesise that the implementation of evidence-based criteria for the safe early discharge of infants aged < 3 months old with FWS is associated with a rate of unplanned reattendance to hospital within 7 days of discharge which is non-inferior to that observed under current practice. Our secondary research questions will address gaps in local evidence regarding infections in these infants, to enable safe implementation of further guideline changes reflecting evidence-based, best-practice care. This could include, for example, deferment of lumbar puncture and/or outpatient management of very low risk infants.
+
+# Study Design
+
+Febrile3 is a pragmatic, multi-site, single-armed study of the safety of a change in Perth Children's Hospital (PCH) and Fiona Stanley Hospital (FSH) policy allowing infants with fever without source (FWS) who fulfil evidence-based criteria for being at low risk for severe bacterial infection (SBI) to be discharged as early as 24 hours from hospital.
+
+# Primary Objective
+
+Our primary hypothesis is that the implementation of evidence-based criteria for the safe early discharge of infants aged less than 3 months old with fever without source  is associated with a rate of unplanned re-attendance to hospital within 7 days of discharge which is non-inferior to that observed under current practice.
+
+The primary outcome is the proportion of low-risk infants discharged before the current standard of 48 hours who re-presented or who were re-admitted to hospital due to a clinical deterioration/care-giver concern within 7 days of discharge.
+
+
+# Sample Size and Accrual
+
+The trial is expected to run for up to two years and the expectation is that up to 500 individuals may be enrolled over the course of the study. Therefore, we've assumed accrual of about 5 individuals per week to achieve 500 individuals over the two year period.
+
+The end-point is 7-day re-admission. This would imply that at any stage of analysis, about 5 individuals may be enrolled without their 7-day follow-up information. This additional uncertainty could be incoporated into the analysis through the use of posterior predictive probabilities for the missing data.
+
+\clearpage
+
+# Statistical Analysis
+
+We will utilise Bayesian inference to assess and declare whether or not the re-admission rate under the new policy is no worse than the historical rate. Bayesian inference allows for coherent sequential updating of evidence as new information becomes available.
+
+Assume that the historical baseline rate is $\theta_0$, and we wish to assess the response rate under the new policy, denoted $\theta$. We declare the new rate acceptable if it is within some tolerance $\tau$ of the historical rate. That is, we aim to assess the following:
+$$
+\begin{aligned}
+&H_0:\theta \geq \theta_0 + \tau\quad\text{(unsafe/inferior)} \\
+&H_1:\theta < \theta_0 + \tau\quad\text{(safe/non-inferior)}
+\end{aligned}
+$$
+and make a decision as to whether the response rate under the policy change is within the allowed tolerance.
+
+We assume $\theta_0$, the historical rate, is known exactly. However, it may be more realistic to assume some distribution $\theta_0\sim\text{Beta}(\alpha_0,\beta_0)$ such that $\alpha_0/(\alpha_0+\beta_0)$ is equal to the historical rate estimate and an appropriate variance.
+
+The new rate following the change in policy, and the number of responses observed, will be modeled by a Beta-Binomial model. We pre-specify analyses at stages $k=1,...,K$ and define
+$$
+\begin{aligned}
+n_k &= \text{the number of enrolees since stage } k-1 \\
+x_k &= \text{the number of re-admissions since stage }k-1 \\
+N_k = \sum_{i=1}^k n_i &= \text{the total sample size at stage } k \\
+y_k = \sum_{i=1}^k x_i &= \text{the total number of re-admissions by stage } k
+\end{aligned}.
+$$
+Assuming that the response rate does not drift over the course of the trial the complete model is
+$$
+\begin{aligned}
+\pi_0(\theta) &= \text{Beta}(\theta|\alpha,\beta) \\
+f(y_k|\theta) &= \text{Binomial}(N_k, \theta) \\
+\pi_k(\theta|y_k) &= \text{Beta}(\theta|\alpha + y_k, \beta + N_k - y_k) \\
+P_k &= \int_0^{\theta_0+\tau} \pi_k(\theta|y_k) d\theta
+\end{aligned}.
+$$
+where $P_k$ is the posterior probability that the new rate is within the specified tolerance of the historical rate, that is, the probability of $H_1$.
+
+Our decision rule at stage $k$ is as follows
+$$
+\delta_k(y_k) = \begin{cases} 
+a_0 &\text{ if }P_k < \underbar c_k \implies (\text{accept } H_0\text{, declare inferior}), \\
+a_1 &\text{ if }P_k > \bar c_k \implies (\text{accept } H_1\text{, declare non-inferior}), \\
+a_2 &\text{ if }\underbar c_k \leq P_k\ \leq \bar c_k\text{ and } k<K\implies (\text{proceed to stage } k+1), \\
+a_3 &\text{ if }\underbar c_k \leq P_k\ \leq \bar c_k\text{ and } k=K\implies (\text{inconclusive}).
+\end{cases}
+$$
+The trial is stopped at stage $k$ if $\delta_k(y_k)\in\{a_0,a_1\}$.
+
+We aim to estimate the following under repeated trials for some true response rate $\theta^\star$:
+
+  * The probability of an incorrect decision,
+  * The probability of stopping the trial early,
+  * The expected sample size.
+  
+  
+  
+```{r}
+scenarios <- tibble(
+  "Scenario" = 1:9,
+  "$\\tau$" = rep(0.03, 9),
+  "$\\theta_0$" = rep(0.043, 9),
+  "$\\theta^\\star$" = c(0.073, seq(0.03, 0.1, 0.01)),
+  "$\\underbar c_k$" = rep(0.05, 9),
+  "$\\bar c_k$" = rep(0.975, 9))
+
+res <- t(sapply(1:nrow(scenarios), function(i) {
+  fixed_trial(d = as.numeric(scenarios[i, 2]),
+              p0 = as.numeric(scenarios[i, 3]),
+              ptru = as.numeric(scenarios[i, 4]),
+              k_non = 0.975, k_inf = 0.05)
+}))
+
+bind_cols(scenarios, 
+          "$\\mathbb P[\\text{non-inferior}]$" = sprintf("%.3f", res[, 1]),
+          "$\\mathbb P[\\text{inferior}]$" = sprintf("%.3f", res[, 2])) %>%
+ kable(escape = F, booktabs = T, align = "r",
+       caption = "Scenarios considered."
+       ) %>% 
+  kable_styling(latex_options = "hold_position") %>%
+  collapse_rows(latex_hline = "none", columns = 1:6, valign = "top")
+```
+
+\clearpage
+
+# Simulations
+
+The historical 7-day readmission rate for fever without source non serious bacterial infection was estimated as 0.043 (63/1,478) based on births between 2008 and 2012. We used a fixed historical rate of $\theta_0 = 0.05$ and a tolerance of $\tau = 0.03$.
+
+Due to the low rate of occurrence of the outcome event, we specified no analyses until at least 100 individuals had been followed-up. We then assumed analyses at sample sizes $\{100,150,200,...,450,500\}$ where complete follow-up was assumed (i.e. at $n=100$ we have data on all 100 individuals). All results are dependent on this schedule of analyses.
+
+We simulate 10,000 datasets under each scenario for the value of $\theta^\star \in \{0.05,0.06,...,0.10\}$ with the null scenario $\theta^\star = \theta_0+\tau$. The protocol specified posterior probability cut-offs $(\underline c = 0.05, \overline c = 0.975)$, however, for completeness we investigated the Cartesian product
+$$
+\{0.01 + 0.005n|n\in0:8\}\times\{0.95 + 0.005m|m\in0:8\}
+$$
+as options for the values of $(\underline c, \overline c)$. Detailed results for the setup specified in the proposal are given in [Section 7.1](#protocol_spec) with results under other configurations given in [Section 8](#dec_summ).
+
+
+
+We investigated the effect of non-informative and informative priors for the new readmission rate (Figure \@ref(fig:priors)).
+
+```{r priors, fig.height = 2.5, fig.width = 4, fig.align='center', fig.cap="Priors considered."}
+ggplot(data.frame(x = c(0, 1)), aes(x)) +
+  stat_function(aes(linetype = 'Beta(1.0,1.0)'), fun = dbeta, args = list(shape1 = 1, shape2 = 1)) +
+  stat_function(aes(linetype = 'Beta(0.5,0.5)'), fun = dbeta, args = list(shape1 = 0.5, shape2 = 0.5)) +
+  stat_function(aes(linetype = 'Beta(1.5,17.5)'), fun = dbeta, args = list(shape1 = 1.5, shape2 = 17.5)) +
+  scale_linetype("") +
+  theme(legend.position = c(0.5, 0.5), legend.background = element_blank()) +
+  labs(x = expression(theta), y = expression(pi[0](theta)))
+```
+
+At each stage, we can determine the number of responses required to make a particular decision for a given probability cut-off (ignoring the sequential process). This may be useful for sanity checking boundaries at each interim (Table \@ref(tab:unnamed-chunk-4)). 
+
+```{r}
+n_int <- seq(100, 500, 50)
+theta0 <- 0.043
+tau <- 0.03
+delta <- theta0 + tau
+
+k_non <- seq(0.95, 0.99, 0.005)
+res_non <- do.call(cbind, 
+lapply(n_int,
+       function(n) {
+        sapply(k_non, function(x) {
+  tmp <- range(which(pbeta(delta, 1 + 0:n, 1 + n - 0:n) > x) - 1)
+  paste(tmp, collapse = "-")
+})}))
+colnames(res_non) <- n_int
+rownames(res_non) <- k_non
+
+k_inf <- seq(0.05, 0.01, -0.005)
+res_inf <- do.call(cbind, 
+lapply(n_int,
+       function(n) {
+        sapply(k_inf, function(x) {
+  tmp <- range(which(pbeta(delta, 1 + 0:n, 1 + n - 0:n) < x) - 1)
+  paste(tmp, collapse = "-")
+})}))
+colnames(res_inf) <- n_int
+rownames(res_inf) <- k_inf
+```
+
+
+```{r}
+kable(rbind(res_non, res_inf), booktabs = TRUE, col.names = c(seq(100, 500, 50)),
+      align = "c", caption = "Responses required to make decision of non-inferior/inferior under Beta(1,1) prior.") %>%
+  kable_styling(latex_options = "hold_position", font_size = 8) %>%
+  add_header_above(header = c(" " = 1, "Sample size at interim" = 9)) %>%
+  group_rows(group_label = "Non-inferiority bound", 1, 9) %>%
+  group_rows(group_label = "Inferiority bound", 10, 18) %>%
+  column_spec(2, border_left = T)
+```
+
+
+```{r, cache = TRUE, eval=FALSE}
+# Note that this is run separately to store the 
+# results and reduce compilation time of the 
+# R markdown document
+set.seed(94567)
+n_sims <- 1e4
+
+scenarios <- data.frame(
+  "scenario" = 1:18,
+  d = rep(tau, 18),
+  p0 = rep(theta0, 18),
+  ptru = rep(c(delta, 0.05, 0.06, 0.07, 0.09, 0.10), each = 3),
+  a0 = rep(c(1, 0.5, 1.5), 6),
+  b0 = rep(c(1, 0.5, 17.5), 6))
+
+bounds <- expand.grid(k_inf = seq(0.05, 0.01, -0.005),
+                      k_non = seq(0.95, 0.99, 0.005))
+
+apply_decision <- function(sc_res, k_inf, k_non) {
+  dec_res <- map_df(
+    lapply(1:length(sc_res), function(i) 
+    do.call(rbind.data.frame, lapply(1:n_sims, function(j) 
+      trial_decision(sc_res[[i]][[j]], k_inf = k_inf, k_non = k_non)))),
+      ~ as.data.frame(.x), .id = "scenario") %>%
+    mutate(k_inf = k_inf, k_non = k_non, scenario = as.numeric(scenario))
+  return(dec_res)
+}
+
+summarise_decision <- function(dec_res) {
+  dec_res %>% 
+  group_by(scenario, k_inf, k_non) %>% 
+  summarise(decl_inf = mean(decision == "inferior"),
+            decl_non = mean(decision == "non-inferior"),
+            stop_early = mean(action == "stop"),
+            avg_n = mean(n)) %>%
+  ungroup()
+}
+
+cl <- makeCluster(4)
+registerDoParallel(cl)
+
+sc_res <- lapply(1:nrow(scenarios),
+       function(i) sim_scenario(n_sims,
+                                d = scenarios[i, "d"],
+                                p0 = scenarios[i, "p0"],
+                                ptru = scenarios[i, "ptru"],
+                                a = scenarios[i, "a0"],
+                                b = scenarios[i, "b0"]))
+stopCluster(cl)
+saveRDS(sc_res, file = "out/simulation_data_prior.rds")
+
+dec_res <- lapply(1:nrow(bounds), function(i)
+  apply_decision(sc_res, bounds[i, 1], bounds[i, 2]))
+dec_res_df <- map_df(dec_res, ~ as.data.frame(.x), .id = "decision_rule") %>%
+  mutate(decision_rule = as.numeric(decision_rule))
+dec_res_df <- left_join(scenarios, dec_res_df)
+saveRDS(dec_res_df, file = "out/decision_data_prior.rds")
+```
+
+
+```{r read_dat}
+n_sims <- 1e4
+dec_res_df <- readRDS("out/decision_data_prior.rds")
+```
+
+\clearpage
+
+## Protocol Specification {#protocol_spec}
+
+The protocol and proposal specified $\theta_0 = 0.043$, $\tau = 0.03$, $\underline c = 0.05$, $\overline c = 0.975$. The simulations indicate control of Type I error at the level 0.07 under a uniform prior. We estimate power of 0.82 at a true value of $\theta^\star = 0.05$ and 0.52 at a true value of $\theta^\star = 0.06$. For values of $\theta^\star \geq 0.09$ there was at least 1/3 probability of stopping early for inferiority (Figure \@ref(fig:unnamed-chunk-7)).
+
+```{r}
+dec_res_df %>% 
+  filter(k_inf == 0.05, k_non == 0.975, ptru %in% c(0.05, 0.06, 0.07, 0.073, 0.09, 0.10)) %>% 
+  group_by(a0, b0, ptru) %>%
+  summarise(inf = mean(decision == "inferior"), 
+            non = mean(decision == "non-inferior"),
+            stop_early = mean(action == "stop"),
+            mean_sam = mean(n),
+            sd_sam = sd(n),
+            mean_est = mean(est),
+            std_est = sd(est)) %>%
+  arrange(ptru) %>%
+  kable(format = "latex", booktabs = T, escape = F, digits = c(1,1,3, 2, 2, 2, 0, 0, 2, 2), 
+        linesep = c('', '', '\\addlinespace'),
+        caption = "Decision probabilities, stopping probability, and expected sample size.",
+        col.names = c("$\\alpha$", "$\\beta$", "$\\theta^\\star$", "$\\mathbb P[\\text{inferior}]$", 
+                      "$\\mathbb P[\\text{non-inferior}]$",
+                      "$\\mathbb P[\\text{stop early}]$",
+                      "$\\mathbb E[N]$", "$\\text{SD}[N]$",
+                      "$\\mathbb E[\\hat\\theta]$",
+                      "$\\text{SD}[\\hat \\theta]$")) %>%
+  kable_styling(latex_options = c("hold_position"), font_size = 8)
+```
+
+
+```{r, fig.width = 6, fig.cap = "Marginal probability of stopping and making decision at each stage under each true rate."}
+dec_res_df %>% 
+  filter(k_inf == 0.05, k_non == 0.975, ptru %in% c(0.05, 0.06, 0.07, 0.073, 0.09, 0.10), 
+         a0 == 1, b0 == 1) %>% 
+  group_by(ptru)  %>%
+  count(decision, n) %>%
+  ungroup() %>%
+  mutate(lab = paste0("True rate = ", ptru)) %>%
+  filter(decision != "inconclusive") %>%
+  ggplot(aes(n, nn / n_sims)) +
+  facet_grid(decision ~ ptru, labeller = label_bquote(cols = theta^"*" * " = " * .(ptru))) + 
+  geom_bar(stat = "identity") +
+  labs(y = "Probability stop and deicision", x = "Sample size")
+```
+
+
+\clearpage
+
+# Decision Probability Summaries {#dec_summ}
+
+```{r}
+tmp <- dec_res_df %>%
+  group_by(scenario, d, p0, ptru, a0, b0, k_inf, k_non) %>% 
+  summarise(p_non = mean(decision == "non-inferior")) %>% 
+  ungroup() %>%
+  spread(k_inf, p_non)
+```
+
+
+```{r}
+tmp %>%
+  filter(scenario %in% 1:3) %>%
+  kable("latex", booktabs = T, digits = c(2,2,2,2,2,2,3,rep(2,9)),
+        caption = "Prob(declare non-inferior) - $\\theta^\\star=\\theta_0+\\tau$") %>% 
+  kable_styling(latex_options = "hold_position", font_size = 8) %>%
+  collapse_rows(columns = 1:7, latex_hline = "none", valign = "top") %>%
+  add_header_above(header = c(" " = 7, "k_inf" = 9))
+```
+
+
+```{r}
+tmp %>%
+  filter(scenario %in% 4:6) %>%
+  kable(booktabs = T, digits = c(2,2,2,2,2,2,3,rep(2,9)), 
+        caption = "Prob(declare non-inferior) - $\\theta^\\star=0.05$") %>% 
+  kable_styling(font_size = 8) %>%
+  collapse_rows(columns = 1:7, latex_hline = "none", valign = "top") %>%
+  add_header_above(header = c(" " = 7, "k_inf" = 9))
+```
+
+
+```{r}
+tmp %>%
+  filter(scenario %in% 7:9) %>%
+  kable(booktabs = T, digits = c(2,2,2,2,2,2,3,rep(2,9)), 
+        caption = "Prob(declare non-inferior) - $\\theta^\\star=0.06$") %>% 
+  kable_styling(font_size = 8) %>%
+  collapse_rows(columns = 1:7, latex_hline = "none", valign = "top") %>%
+  add_header_above(header = c(" " = 7, "k_inf" = 9))
+```
+
+
+```{r}
+tmp %>%
+  filter(scenario %in% 10:12) %>%
+  kable(booktabs = T, digits = c(2,2,2,2,2,2,3,rep(2,9)), 
+        caption = "Prob(declare non-inferior) - $\\theta^\\star=0.07$") %>% 
+  kable_styling(font_size = 8) %>%
+  collapse_rows(columns = 1:7, latex_hline = "none", valign = "top") %>%
+  add_header_above(header = c(" " = 7, "k_inf" = 9))
+```
+
+
+```{r}
+tmp %>%
+  filter(scenario %in% 13:15) %>%
+  kable(booktabs = T, digits = c(2,2,2,2,2,2,3,rep(2,9)), 
+        caption = "Prob(declare inferior) - $\\theta^\\star=0.09$") %>% 
+  kable_styling(font_size = 8) %>%
+  collapse_rows(columns = 1:7, latex_hline = "none", valign = "top") %>%
+  add_header_above(header = c(" " = 7, "k_inf" = 9))
+```
+
+
+```{r}
+tmp %>%
+  filter(scenario %in% 16:18) %>%
+  kable(booktabs = T, digits = c(2,2,2,2,2,2,3,rep(2,9)), 
+        caption = "Prob(declare inferior) - $\\theta^\\star=0.10$") %>% 
+  kable_styling(font_size = 8) %>%
+  collapse_rows(columns = 1:7, latex_hline = "none", valign = "top") %>%
+  add_header_above(header = c(" " = 7, "k_inf" = 9))
+```
+
+\clearpage
+
+```{r}
+tmp <- dec_res_df %>%
+  group_by(scenario, d, p0, ptru, a0, b0, k_inf, k_non) %>% 
+  summarise(p_non = mean(decision == "inferior")) %>% 
+  ungroup() %>%
+  spread(k_inf, p_non)
+
+tmp %>%
+  filter(scenario %in% 1:3) %>%
+  kable(booktabs = T, digits = c(2,2,2,2,2,2,3,rep(2,9)), 
+        caption = "Prob(declare inferior) - $\\theta^\\star=\\theta_0 + \\tau$") %>% 
+  kable_styling(font_size = 8) %>%
+  collapse_rows(columns = 1:6, latex_hline = "none", valign = "top") %>%
+  add_header_above(header = c(" " = 7, "k_inf" = 9))
+tmp %>%
+  filter(scenario %in% 4:6) %>%
+  kable(booktabs = T, digits = c(2,2,2,2,2,2,3,rep(2,9)), 
+        caption = "Prob(declare inferior) - $\\theta^\\star=0.05$") %>% 
+  kable_styling(font_size = 8) %>%
+  collapse_rows(columns = 1:6, latex_hline = "none", valign = "top") %>%
+  add_header_above(header = c(" " = 7, "k_inf" = 9))
+
+tmp %>%
+  filter(scenario %in% 7:9) %>%
+  kable(booktabs = T, digits = c(2,2,2,2,2,2,3,rep(2,9)), 
+        caption = "Prob(declare inferior) - $\\theta^\\star=0.06$") %>% 
+  kable_styling(font_size = 8) %>%
+  collapse_rows(columns = 1:6, latex_hline = "none", valign = "top") %>%
+  add_header_above(header = c(" " = 7, "k_inf" = 9))
+
+tmp %>%
+  filter(scenario %in% 10:12) %>%
+  kable(booktabs = T, digits = c(2,2,2,2,2,2,3,rep(2,9)), 
+        caption = "Prob(declare inferior) - $\\theta^\\star=0.07$") %>% 
+  kable_styling(font_size = 8) %>%
+  collapse_rows(columns = 1:6, latex_hline = "none", valign = "top") %>%
+  add_header_above(header = c(" " = 7, "k_inf" = 9))
+
+tmp %>%
+  filter(scenario %in% 13:15) %>%
+  kable(booktabs = T, digits = c(2,2,2,2,2,2,3,rep(2,9)), 
+        caption = "Prob(declare inferior) - $\\theta^\\star=0.09$") %>% 
+  kable_styling(font_size = 8) %>%
+  collapse_rows(columns = 1:6, latex_hline = "none", valign = "top") %>%
+  add_header_above(header = c(" " = 7, "k_inf" = 9))
+
+tmp %>%
+  filter(scenario %in% 16:18) %>%
+  kable(booktabs = T, digits = c(2,2,2,2,2,2,3,rep(2,9)), 
+        caption = "Prob(declare inferior) - $\\theta^\\star=0.10$") %>% 
+  kable_styling(font_size = 8) %>%
+  collapse_rows(columns = 1:6, latex_hline = "none", valign = "top") %>%
+  add_header_above(header = c(" " = 7, "k_inf" = 9))
+```
